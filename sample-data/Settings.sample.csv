@@ -1,0 +1,7 @@
+setting_key,setting_value
+class_name,Mila Nartana
+default_monthly_fee,80
+reminder_day,5
+currency,USD
+whatsapp_message_template,"Hi, this is a gentle reminder from Mila Nartana. Fee pending for {{student_name}}: {{due_breakdown}}. Total due: {{total_due}}. Thank you."
+
