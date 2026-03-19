@@ -5,6 +5,7 @@
 const SHEETS_WEB_APP_URL = import.meta.env.VITE_SHEETS_WEB_APP_URL || "";
 const SHEETS_WRITE_TOKEN = import.meta.env.VITE_SHEETS_WRITE_TOKEN || "";
 const SHEETS_PROXY_PATH = "/apps-script";
+const VERCEL_PROXY_PATH = "/api/sheets";
 let lastSheetsRequest = {
   action: "",
   ok: null,
@@ -16,7 +17,8 @@ let lastSheetsRequest = {
 function getEndpointUrl() {
   // In local dev, use Vite proxy to avoid browser CORS issues with Apps Script.
   if (import.meta.env.DEV) return SHEETS_PROXY_PATH;
-  return SHEETS_WEB_APP_URL;
+  // In production, use server-side proxy so write token never reaches browser.
+  return VERCEL_PROXY_PATH;
 }
 
 function parseNumber(value, fallback = 0) {
@@ -112,7 +114,7 @@ function unwrapResponseBody(body) {
 }
 
 async function callSheetsEndpoint(action, payload = {}) {
-  if (!SHEETS_WEB_APP_URL) {
+  if (import.meta.env.DEV && !SHEETS_WEB_APP_URL) {
     throw new Error("Set VITE_SHEETS_WEB_APP_URL in your .env file");
   }
 
@@ -126,8 +128,11 @@ async function callSheetsEndpoint(action, payload = {}) {
 
   const response = await fetch(getEndpointUrl(), {
     method: "POST",
-    // Avoid custom headers so browser skips CORS preflight for Apps Script.
-    body: JSON.stringify({ action, payload, token: SHEETS_WRITE_TOKEN }),
+    body: JSON.stringify(
+      import.meta.env.DEV
+        ? { action, payload, token: SHEETS_WRITE_TOKEN }
+        : { action, payload },
+    ),
   });
 
   if (!response.ok) {
@@ -194,14 +199,15 @@ export async function updateStudentRow(studentRow) {
 }
 
 export function hasSheetsEndpointConfigured() {
-  return Boolean(SHEETS_WEB_APP_URL);
+  if (import.meta.env.DEV) return Boolean(SHEETS_WEB_APP_URL);
+  return true;
 }
 
 export function getSheetsDebugStatus() {
   return {
-    endpointConfigured: Boolean(SHEETS_WEB_APP_URL),
-    writeTokenConfigured: Boolean(SHEETS_WRITE_TOKEN),
-    endpointMode: import.meta.env.DEV ? "vite-proxy" : "direct-webapp",
+    endpointConfigured: import.meta.env.DEV ? Boolean(SHEETS_WEB_APP_URL) : true,
+    writeTokenConfigured: import.meta.env.DEV ? Boolean(SHEETS_WRITE_TOKEN) : null,
+    endpointMode: import.meta.env.DEV ? "vite-proxy" : "vercel-server-proxy",
     lastRequest: lastSheetsRequest,
   };
 }
