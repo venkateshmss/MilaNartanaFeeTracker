@@ -173,6 +173,12 @@ function SummaryCard({ label, value, tone }) {
 
 function DebugPanel({ debugStatus, loadError }) {
   const last = debugStatus.lastRequest || {};
+  const tokenState =
+    debugStatus.writeTokenConfigured === null
+      ? "Server-managed"
+      : debugStatus.writeTokenConfigured
+        ? "Yes"
+        : "No";
   return (
     <section className="info-card debug-panel">
       <p className="eyebrow">Debug</p>
@@ -183,7 +189,7 @@ function DebugPanel({ debugStatus, loadError }) {
         </div>
         <div>
           <dt>Write token configured</dt>
-          <dd>{debugStatus.writeTokenConfigured ? "Yes" : "No"}</dd>
+          <dd>{tokenState}</dd>
         </div>
         <div>
           <dt>Endpoint mode</dt>

@@ -7,7 +7,7 @@ Simple mobile-first React demo for tracking month-wise dance class fee payments,
 1. Install Node.js 18+.
 2. Run `npm install`.
 3. Copy `.env.example` to `.env`.
-4. Set `VITE_SHEETS_WEB_APP_URL` in `.env` with your Apps Script Web App URL.
+4. Set `VITE_SHEETS_WEB_APP_URL` and `VITE_SHEETS_WRITE_TOKEN` in `.env` for local dev.
 5. Run `npm run dev`.
 6. For phone testing on same Wi-Fi, run `npm run dev -- --host`.
 7. Open `http://<your-laptop-local-ip>:5173` in your mobile browser.
@@ -37,9 +37,12 @@ Simple mobile-first React demo for tracking month-wise dance class fee payments,
 5. Deploy Apps Script as Web App:
    - Execute as: Me
    - Who has access: Anyone with the link (or your Google Workspace users)
-6. Paste the deployed URL into `VITE_SHEETS_WEB_APP_URL` in `.env`.
-7. Restart `npm run dev`.
-8. Dev mode uses a Vite proxy (`/apps-script`) to avoid browser CORS issues.
+6. Local dev uses a Vite proxy (`/apps-script`) and sends token from `.env`.
+7. For Vercel production, use server-side env vars (not `VITE_*`):
+   - `SHEETS_WEB_APP_URL`
+   - `SHEETS_WRITE_TOKEN`
+8. In production, frontend calls `/api/sheets` so token is never exposed in browser bundle.
+9. Restart `npm run dev` after `.env` changes.
 
 ## Troubleshooting `Failed to fetch`
 
