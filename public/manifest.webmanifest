@@ -1,0 +1,19 @@
+{
+  "name": "Mila Nartana Fee Tracker",
+  "short_name": "Mila Fees",
+  "description": "Track student fees month-wise, pending dues, and reminders.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#090d1a",
+  "theme_color": "#111a33",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/mila-nartana-logo.png",
+      "sizes": "any",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
