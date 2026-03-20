@@ -780,6 +780,83 @@ button {
   text-decoration: none;
 }
 
+.dashboard-progress-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 12px;
+  background: rgba(10, 16, 30, 0.72);
+}
+
+.progress-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.progress-head strong {
+  color: var(--text);
+  font-size: 1rem;
+}
+
+.progress-track {
+  height: 12px;
+  border-radius: 999px;
+  background: rgba(126, 149, 204, 0.24);
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #36c996, #2bd2ff);
+}
+
+.mini-chart {
+  display: grid;
+  gap: 8px;
+}
+
+.mini-bar-row {
+  display: grid;
+  grid-template-columns: 64px 1fr 26px;
+  align-items: center;
+  gap: 8px;
+}
+
+.mini-bar-label,
+.mini-bar-value {
+  font-size: 0.8rem;
+  color: var(--text-soft);
+}
+
+.mini-bar-track {
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(126, 149, 204, 0.2);
+  overflow: hidden;
+}
+
+.mini-bar {
+  height: 100%;
+  border-radius: inherit;
+}
+
+.mini-bar-paid {
+  background: #42cb97;
+}
+
+.mini-bar-partial {
+  background: #ffbe58;
+}
+
+.mini-bar-pending {
+  background: #ff6e7a;
+}
+
 @media (min-width: 720px) {
   .app-shell {
     padding: 28px 22px 52px;

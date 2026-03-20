@@ -74,6 +74,17 @@ function getCurrentMonthKey() {
   return `${year}-${month}`;
 }
 
+function addMonthsToKey(monthKey, offset) {
+  const normalized = normalizeMonthKey(monthKey);
+  if (!normalized) return "";
+  const [yearStr, monthStr] = normalized.split("-");
+  const base = new Date(Number(yearStr), Number(monthStr) - 1, 1);
+  base.setMonth(base.getMonth() + offset);
+  const year = base.getFullYear();
+  const month = String(base.getMonth() + 1).padStart(2, "0");
+  return `${year}-${month}`;
+}
+
 function isDebugModeEnabled() {
   if (typeof window === "undefined") return false;
   const params = new URLSearchParams(window.location.search);
@@ -237,22 +248,21 @@ function Dashboard({
   monthChoices,
   onMonthChange,
   summary,
+  expectedAmount,
   totalAmount,
+  pendingGapAmount,
+  collectionRate,
   formatter,
-  appSettings,
-  studentsWithStatus,
-  reminderMetaByStudentId,
-  onQuickAddPayment,
-  onOpenStudentDetails,
 }) {
   const monthInputRef = useRef(null);
   const monthLabel = monthChoices.find((option) => option.key === monthKey)?.label ?? monthKey;
   const minMonth = monthChoices[0]?.key || "";
   const maxMonth = monthChoices[monthChoices.length - 1]?.key || "";
-  const reminderTriggerDate = getReminderTriggerDate(monthKey, appSettings.reminder_day);
-  const reminderTriggerLabel = reminderTriggerDate
-    ? formatReadableDate(reminderTriggerDate)
-    : "-";
+  const studentsDueCount = summary.pending + summary.partial;
+  const paidBar = summary.paid;
+  const partialBar = summary.partial;
+  const pendingBar = summary.pending;
+  const barMax = Math.max(1, paidBar, partialBar, pendingBar);
 
   return (
     <section className="panel stack-lg">
@@ -314,81 +324,67 @@ function Dashboard({
         <SummaryCard label="Paid" value={summary.paid} tone="paid" />
         <SummaryCard label="Pending" value={summary.pending} tone="pending" />
         <SummaryCard label="Partial" value={summary.partial} tone="partial" />
-        <SummaryCard label="Total Amount" value={formatter.format(totalAmount)} tone="total" />
+        <SummaryCard label="Expected Total" value={formatter.format(expectedAmount)} tone="total" />
+        <SummaryCard label="Received Amount" value={formatter.format(totalAmount)} tone="total" />
+        <SummaryCard label="Total Amount Pending" value={formatter.format(pendingGapAmount)} tone="pending" />
       </div>
 
       <div className="info-card">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Selected month students</p>
-            <h2>{monthLabel} status list</h2>
+            <p className="eyebrow">Monthly snapshot</p>
+            <h2>{monthLabel} collection status</h2>
           </div>
-          <p className="section-copy">Open student profile, add payment, or send reminder.</p>
+          <p className="section-copy">
+            Collection progress and month-wise student status at a glance.
+          </p>
         </div>
 
-        <div className="student-list-table compact-student-table" role="table" aria-label="Dashboard month student list">
-          <div className="student-list-head dashboard-table-head" role="row">
-            <span>Name</span>
-            <span>Due amount</span>
-            <span>Actions</span>
+        <div className="dashboard-progress-card">
+          <div className="progress-head">
+            <strong>{collectionRate}% collected</strong>
+            <span className="tiny-copy">
+              Due students: {studentsDueCount} | Received: {formatter.format(totalAmount)}
+            </span>
           </div>
-          {studentsWithStatus.map((student) => {
-            const reminderMeta = reminderMetaByStudentId[student.student_id];
-            const isUnpaidForSelectedMonth =
-              student.selectedMonthStatus === "Pending" || student.selectedMonthStatus === "Partial";
-            const isReminderEligible =
-              isUnpaidForSelectedMonth &&
-              isReminderDueForMonth(monthKey, appSettings.reminder_day) &&
-              Boolean(reminderMeta);
-
-            return (
-              <div key={student.student_id} className="student-list-row dashboard-row" role="row">
-                <div data-label="Name" className="cell-name">
-                  <button
-                    type="button"
-                    className="link-button"
-                    onClick={() => onOpenStudentDetails(student.student_id)}
-                  >
-                    {student.student_name}
-                  </button>
-                  <p className="tiny-copy">{student.selectedMonthStatus}</p>
-                </div>
-                <div data-label="Due amount" className="cell-due">
-                  <span
-                    className={`due-amount-chip ${getDueAmountClass(
-                      student.selectedMonthStatus,
-                      Number(student.selectedMonthFee?.balance_due || 0),
-                    )}`}
-                  >
-                    {formatter.format(Number(student.selectedMonthFee?.balance_due || 0))}
-                  </span>
-                </div>
-                <div data-label="Actions" className="cell-actions dashboard-actions">
-                  <button
-                    type="button"
-                    className="ghost-button icon-action"
-                    onClick={() => onQuickAddPayment(student.student_id)}
-                  >
-                    +Pay
-                  </button>
-                  {isReminderEligible ? (
-                    <a
-                      className="whatsapp-button icon-action"
-                      href={reminderMeta.whatsappLink}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      WA
-                    </a>
-                  ) : isUnpaidForSelectedMonth ? (
-                    <span className="no-due-label">Reminders start {reminderTriggerLabel}</span>
-                  ) : (
-                    <span className="no-due-label">No reminder</span>
-                  )}
-                </div>
+          <div className="progress-track" aria-label="Collection progress">
+            <div
+              className="progress-fill"
+              style={{ width: `${Math.max(0, Math.min(100, collectionRate))}%` }}
+            />
+          </div>
+          <div className="mini-chart" aria-label="Status distribution">
+            <div className="mini-bar-row">
+              <span className="mini-bar-label">Paid</span>
+              <div className="mini-bar-track">
+                <div
+                  className="mini-bar mini-bar-paid"
+                  style={{ width: `${(paidBar / barMax) * 100}%` }}
+                />
               </div>
-            );
-          })}
+              <span className="mini-bar-value">{paidBar}</span>
+            </div>
+            <div className="mini-bar-row">
+              <span className="mini-bar-label">Partial</span>
+              <div className="mini-bar-track">
+                <div
+                  className="mini-bar mini-bar-partial"
+                  style={{ width: `${(partialBar / barMax) * 100}%` }}
+                />
+              </div>
+              <span className="mini-bar-value">{partialBar}</span>
+            </div>
+            <div className="mini-bar-row">
+              <span className="mini-bar-label">Pending</span>
+              <div className="mini-bar-track">
+                <div
+                  className="mini-bar mini-bar-pending"
+                  style={{ width: `${(pendingBar / barMax) * 100}%` }}
+                />
+              </div>
+              <span className="mini-bar-value">{pendingBar}</span>
+            </div>
+          </div>
         </div>
       </div>
     </section>
@@ -410,8 +406,7 @@ function StudentsScreen({
   const monthFilterInputRef = useRef(null);
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("All");
-  const [activeFilter, setActiveFilter] = useState("All");
-  const [monthFilter, setMonthFilter] = useState("");
+  const [monthFilter, setMonthFilter] = useState(() => getCurrentMonthKey());
   const [toggleDraft, setToggleDraft] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newStudent, setNewStudent] = useState({
@@ -432,11 +427,10 @@ function StudentsScreen({
   const visibleStudents = studentsWithStatus.filter((student) => {
     const matchesQuery = student.student_name.toLowerCase().includes(query.toLowerCase());
     const matchesLocation = location === "All" || student.location === location;
-    const matchesActiveStatus = activeFilter === "All" || student.status === activeFilter;
     const matchesJoinMonth = monthFilter
       ? hasJoinedByMonth(student.join_month, monthFilter)
       : true;
-    return matchesQuery && matchesLocation && matchesActiveStatus && matchesJoinMonth;
+    return matchesQuery && matchesLocation && matchesJoinMonth;
   });
   const studentRows = useMemo(() => {
     const hasNameSearch = query.trim().length > 0;
@@ -565,9 +559,7 @@ function StudentsScreen({
           <p className="eyebrow">Student status</p>
           <h2>Month-wise payment status</h2>
         </div>
-        <p className="section-copy">
-          Filter by month, location, and active status, then review due months.
-        </p>
+        <p className="section-copy">Filter by month and location, then review due months.</p>
       </div>
 
       <div className="filters-row">
@@ -649,14 +641,6 @@ function StudentsScreen({
           </select>
         </label>
 
-        <label className="field">
-          <span>Status</span>
-          <select value={activeFilter} onChange={(event) => setActiveFilter(event.target.value)}>
-            <option value="All">All</option>
-            <option value="Active">Active</option>
-            <option value="Inactive">Inactive</option>
-          </select>
-        </label>
       </div>
 
       <div>
@@ -1075,7 +1059,11 @@ function PaymentScreen({
   selectedMonthKey,
 }) {
   const paymentMonthInputRef = useRef(null);
-  const [formState, setFormState] = useState(paymentFormDefaults);
+  const [formState, setFormState] = useState({
+    ...paymentFormDefaults,
+    student_id: "",
+  });
+  const [paymentFormError, setPaymentFormError] = useState("");
   const minMonth = availableMonths[0]?.key || "";
   const maxMonth = availableMonths[availableMonths.length - 1]?.key || "";
   const defaultMonth = selectedMonthKey || availableMonths[availableMonths.length - 1]?.key || "";
@@ -1083,7 +1071,7 @@ function PaymentScreen({
   useEffect(() => {
     setFormState((current) => ({
       ...current,
-      student_id: initialStudentId || current.student_id,
+      student_id: initialStudentId || current.student_id || "",
       month_key: selectedMonthKey || current.month_key,
     }));
   }, [initialStudentId, selectedMonthKey]);
@@ -1094,10 +1082,20 @@ function PaymentScreen({
 
   async function submitPayment(event) {
     event.preventDefault();
+    if (!String(formState.student_id || "").trim()) {
+      setPaymentFormError("Please select a student name.");
+      return;
+    }
+    if (String(formState.amount_received || "").trim() === "") {
+      setPaymentFormError("Amount received is required.");
+      return;
+    }
+
+    setPaymentFormError("");
     const saved = await onAddPaymentRow(formState);
     if (!saved) return;
     setFormState({
-      student_id: students[0]?.student_id || "",
+      student_id: "",
       month_key: defaultMonth,
       payment_mode: "Online",
       transfer_date: new Date().toISOString().slice(0, 10),
@@ -1124,8 +1122,10 @@ function PaymentScreen({
           <span>Student name</span>
           <select
             value={formState.student_id}
+            required
             onChange={(event) => updateField("student_id", event.target.value)}
           >
+            <option value="">----</option>
             {students.map((student) => (
               <option key={student.student_id} value={student.student_id}>
                 {student.student_name}
@@ -1209,6 +1209,7 @@ function PaymentScreen({
             type="number"
             min="0"
             placeholder="0"
+            required
             value={formState.amount_received}
             onChange={(event) => updateField("amount_received", event.target.value)}
           />
@@ -1238,6 +1239,7 @@ function PaymentScreen({
           {isSavingPayment ? "Saving..." : "Save payment row"}
         </button>
       </form>
+      {paymentFormError ? <div className="info-card muted">{paymentFormError}</div> : null}
 
     </section>
   );
@@ -1307,7 +1309,7 @@ function ReminderQueue({ reminderGroups, formatter, appSettings }) {
 export default function App() {
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [monthKey, setMonthKey] = useState("");
-  const [paymentStudentId, setPaymentStudentId] = useState(paymentFormDefaults.student_id);
+  const [paymentStudentId, setPaymentStudentId] = useState("");
   const [localStudents, setLocalStudents] = useState(initialStudents);
   const [localMonthlyFees, setLocalMonthlyFees] = useState(initialMonthlyFees);
   const [appSettings, setAppSettings] = useState(settings);
@@ -1371,7 +1373,10 @@ export default function App() {
       .filter(Boolean)
       .sort();
     const fallback = monthOptions.map((m) => m.key);
-    const keys = byData.length ? byData : fallback;
+    const baseKeys = byData.length ? byData : fallback;
+    const currentMonth = getCurrentMonthKey();
+    const futureKeys = Array.from({ length: 24 }, (_, idx) => addMonthsToKey(currentMonth, idx));
+    const keys = [...new Set([...baseKeys, ...futureKeys])].filter(Boolean).sort();
     return keys.map((key) => ({ key, label: formatMonthLabel(key) }));
   }, [localMonthlyFees]);
 
@@ -1577,6 +1582,22 @@ export default function App() {
       ),
     [monthEligibleStudents],
   );
+  const expectedAmount = useMemo(
+    () =>
+      monthEligibleStudents.reduce(
+        (sum, student) => sum + Number(student.selectedMonthFee?.fee_amount ?? student.monthly_fee ?? 0),
+        0,
+      ),
+    [monthEligibleStudents],
+  );
+  const pendingGapAmount = useMemo(
+    () => Math.max(expectedAmount - totalAmount, 0),
+    [expectedAmount, totalAmount],
+  );
+  const collectionRate = useMemo(() => {
+    if (expectedAmount <= 0) return 100;
+    return Math.round((totalAmount / expectedAmount) * 100);
+  }, [expectedAmount, totalAmount]);
   const debugStatus = useMemo(() => getSheetsDebugStatus(), [debugTick, loadError, isLoading]);
   const reminderGroups = useMemo(
     () =>
@@ -1645,7 +1666,7 @@ export default function App() {
           </div>
         </header>
 
-        <ScreenNav activeScreen={activeScreen} onChange={setActiveScreen} />
+        <ScreenNav activeScreen={activeScreen} onChange={handleScreenChange} />
 
         {isLoading && <div className="info-card">Loading data from Google Sheets...</div>}
         {!isLoading && loadError && <div className="info-card muted">{loadError}</div>}
@@ -1657,13 +1678,11 @@ export default function App() {
             monthChoices={monthChoices}
             onMonthChange={setMonthKey}
             summary={summary}
+            expectedAmount={expectedAmount}
             totalAmount={totalAmount}
+            pendingGapAmount={pendingGapAmount}
+            collectionRate={collectionRate}
             formatter={formatter}
-            appSettings={appSettings}
-            studentsWithStatus={monthEligibleStudents}
-            reminderMetaByStudentId={reminderMetaByStudentId}
-            onQuickAddPayment={openPaymentForStudent}
-            onOpenStudentDetails={openStudentDetails}
           />
         )}
         {activeScreen === "students" && (
@@ -1728,3 +1747,9 @@ export default function App() {
     </div>
   );
 }
+  function handleScreenChange(nextScreen) {
+    setActiveScreen(nextScreen);
+    if (nextScreen === "payment") {
+      setPaymentStudentId("");
+    }
+  }
