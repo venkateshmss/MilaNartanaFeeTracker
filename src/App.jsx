@@ -173,15 +173,6 @@ function sortTransactionHistory(rows) {
   );
 }
 
-function SummaryCard({ label, value, tone }) {
-  return (
-    <div className={`summary-card summary-${tone}`}>
-      <span className="summary-label">{label}</span>
-      <strong className="summary-value">{value}</strong>
-    </div>
-  );
-}
-
 function DebugPanel({ debugStatus, loadError }) {
   const last = debugStatus.lastRequest || {};
   const tokenState =
@@ -247,10 +238,12 @@ function Dashboard({
   monthKey,
   monthChoices,
   onMonthChange,
-  summary,
-  expectedAmount,
+  totalStudents,
   totalAmount,
+  expectedAmount,
   pendingGapAmount,
+  fullPaidAmount,
+  partialCollectedAmount,
   collectionRate,
   formatter,
 }) {
@@ -258,11 +251,15 @@ function Dashboard({
   const monthLabel = monthChoices.find((option) => option.key === monthKey)?.label ?? monthKey;
   const minMonth = monthChoices[0]?.key || "";
   const maxMonth = monthChoices[monthChoices.length - 1]?.key || "";
-  const studentsDueCount = summary.pending + summary.partial;
-  const paidBar = summary.paid;
-  const partialBar = summary.partial;
-  const pendingBar = summary.pending;
-  const barMax = Math.max(1, paidBar, partialBar, pendingBar);
+  const expectedSafe = Math.max(Number(expectedAmount || 0), 0);
+  const fullPaidSafe = Math.max(Number(fullPaidAmount || 0), 0);
+  const partialSafe = Math.max(Number(partialCollectedAmount || 0), 0);
+  const collectedSafe = Math.max(Number(totalAmount || 0), 0);
+  const pendingSafe = Math.max(Number(pendingGapAmount || 0), 0);
+  const collectedPercent = expectedSafe > 0 ? Math.round((collectedSafe / expectedSafe) * 100) : 100;
+  const pendingPercent = expectedSafe > 0 ? Math.round((pendingSafe / expectedSafe) * 100) : 0;
+  const progressPercent = (value) =>
+    expectedSafe > 0 ? Math.max(0, Math.min(100, (Number(value || 0) / expectedSafe) * 100)) : 0;
 
   return (
     <section className="panel stack-lg">
@@ -320,70 +317,79 @@ function Dashboard({
         </label>
       </div>
 
-      <div className="summary-grid">
-        <SummaryCard label="Paid" value={summary.paid} tone="paid" />
-        <SummaryCard label="Pending" value={summary.pending} tone="pending" />
-        <SummaryCard label="Partial" value={summary.partial} tone="partial" />
-        <SummaryCard label="Expected Total" value={formatter.format(expectedAmount)} tone="total" />
-        <SummaryCard label="Received Amount" value={formatter.format(totalAmount)} tone="total" />
-        <SummaryCard label="Total Amount Pending" value={formatter.format(pendingGapAmount)} tone="pending" />
+      <div className="dashboard-metrics-grid">
+        <article className="dashboard-metric-card metric-students">
+          <p className="dashboard-metric-title">Total students</p>
+          <strong className="dashboard-metric-value">{totalStudents}</strong>
+          <p className="dashboard-metric-sub">{monthLabel}</p>
+        </article>
+
+        <article className="dashboard-metric-card metric-collected">
+          <p className="dashboard-metric-title">Amount collected</p>
+          <strong className="dashboard-metric-value text-success">{formatter.format(collectedSafe)}</strong>
+          <p className="dashboard-metric-sub">{collectedPercent}% of total</p>
+        </article>
+
+        <article className="dashboard-metric-card metric-pending">
+          <p className="dashboard-metric-title">Amount pending</p>
+          <strong className="dashboard-metric-value text-danger">{formatter.format(pendingSafe)}</strong>
+          <p className="dashboard-metric-sub">{pendingPercent}% outstanding</p>
+        </article>
       </div>
 
       <div className="info-card">
         <div className="section-heading">
           <div>
-            <p className="eyebrow">Monthly snapshot</p>
-            <h2>{monthLabel} collection status</h2>
+            <p className="eyebrow">Collection progress</p>
+            <h2>{monthLabel} progress details</h2>
           </div>
-          <p className="section-copy">
-            Collection progress and month-wise student status at a glance.
-          </p>
+          <p className="section-copy">Amounts are shown against expected total for the month.</p>
         </div>
 
         <div className="dashboard-progress-card">
-          <div className="progress-head">
-            <strong>{collectionRate}% collected</strong>
-            <span className="tiny-copy">
-              Due students: {studentsDueCount} | Received: {formatter.format(totalAmount)}
-            </span>
+          <div className="collection-row">
+            <div className="collection-row-head">
+              <span>Fully paid</span>
+              <strong>{formatter.format(fullPaidSafe)} / {formatter.format(expectedSafe)}</strong>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill progress-fill-paid" style={{ width: `${progressPercent(fullPaidSafe)}%` }} />
+            </div>
           </div>
-          <div className="progress-track" aria-label="Collection progress">
-            <div
-              className="progress-fill"
-              style={{ width: `${Math.max(0, Math.min(100, collectionRate))}%` }}
-            />
+
+          <div className="collection-row">
+            <div className="collection-row-head">
+              <span>Partial payments</span>
+              <strong>{formatter.format(partialSafe)} / {formatter.format(expectedSafe)}</strong>
+            </div>
+            <div className="progress-track">
+              <div className="progress-fill progress-fill-partial" style={{ width: `${progressPercent(partialSafe)}%` }} />
+            </div>
           </div>
-          <div className="mini-chart" aria-label="Status distribution">
-            <div className="mini-bar-row">
-              <span className="mini-bar-label">Paid</span>
-              <div className="mini-bar-track">
-                <div
-                  className="mini-bar mini-bar-paid"
-                  style={{ width: `${(paidBar / barMax) * 100}%` }}
-                />
-              </div>
-              <span className="mini-bar-value">{paidBar}</span>
+
+          <div className="collection-row">
+            <div className="collection-row-head">
+              <span>Total collected</span>
+              <strong>{formatter.format(collectedSafe)} / {formatter.format(expectedSafe)}</strong>
             </div>
-            <div className="mini-bar-row">
-              <span className="mini-bar-label">Partial</span>
-              <div className="mini-bar-track">
-                <div
-                  className="mini-bar mini-bar-partial"
-                  style={{ width: `${(partialBar / barMax) * 100}%` }}
-                />
-              </div>
-              <span className="mini-bar-value">{partialBar}</span>
+            <div className="progress-track">
+              <div className="progress-fill progress-fill-total" style={{ width: `${progressPercent(collectedSafe)}%` }} />
             </div>
-            <div className="mini-bar-row">
-              <span className="mini-bar-label">Pending</span>
-              <div className="mini-bar-track">
-                <div
-                  className="mini-bar mini-bar-pending"
-                  style={{ width: `${(pendingBar / barMax) * 100}%` }}
-                />
-              </div>
-              <span className="mini-bar-value">{pendingBar}</span>
+          </div>
+
+          <div className="collection-row">
+            <div className="collection-row-head">
+              <span>Pending recovery</span>
+              <strong>{formatter.format(pendingSafe)} / {formatter.format(expectedSafe)}</strong>
             </div>
+            <div className="progress-track">
+              <div className="progress-fill progress-fill-pending" style={{ width: `${progressPercent(pendingSafe)}%` }} />
+            </div>
+          </div>
+
+          <div className="collection-rate-box">
+            <span>Collection rate</span>
+            <strong>{collectionRate}%</strong>
           </div>
         </div>
       </div>
@@ -1561,25 +1567,29 @@ export default function App() {
     () => studentsWithStatus.filter((student) => hasJoinedByMonth(student.join_month, monthKey)),
     [studentsWithStatus, monthKey],
   );
-  const summary = useMemo(
-    () =>
-      monthEligibleStudents.reduce(
-        (acc, student) => {
-          if (student.selectedMonthStatus === "Paid") acc.paid += 1;
-          else if (student.selectedMonthStatus === "Partial") acc.partial += 1;
-          else acc.pending += 1;
-          return acc;
-        },
-        { paid: 0, pending: 0, partial: 0 },
-      ),
-    [monthEligibleStudents],
-  );
+  const totalStudents = monthEligibleStudents.length;
   const totalAmount = useMemo(
     () =>
       monthEligibleStudents.reduce(
         (sum, student) => sum + Number(student.selectedMonthFee?.amount_paid || 0),
         0,
       ),
+    [monthEligibleStudents],
+  );
+  const fullPaidAmount = useMemo(
+    () =>
+      monthEligibleStudents.reduce((sum, student) => {
+        if (student.selectedMonthStatus !== "Paid") return sum;
+        return sum + Number(student.selectedMonthFee?.fee_amount || 0);
+      }, 0),
+    [monthEligibleStudents],
+  );
+  const partialCollectedAmount = useMemo(
+    () =>
+      monthEligibleStudents.reduce((sum, student) => {
+        if (student.selectedMonthStatus !== "Partial") return sum;
+        return sum + Number(student.selectedMonthFee?.amount_paid || 0);
+      }, 0),
     [monthEligibleStudents],
   );
   const expectedAmount = useMemo(
@@ -1645,6 +1655,13 @@ export default function App() {
     setSelectedStudentId(studentId);
   }
 
+  function handleScreenChange(nextScreen) {
+    setActiveScreen(nextScreen);
+    if (nextScreen === "payment") {
+      setPaymentStudentId("");
+    }
+  }
+
   return (
     <div className="app-shell">
       <main className="app-frame">
@@ -1677,10 +1694,12 @@ export default function App() {
             monthKey={monthKey}
             monthChoices={monthChoices}
             onMonthChange={setMonthKey}
-            summary={summary}
+            totalStudents={totalStudents}
             expectedAmount={expectedAmount}
             totalAmount={totalAmount}
             pendingGapAmount={pendingGapAmount}
+            fullPaidAmount={fullPaidAmount}
+            partialCollectedAmount={partialCollectedAmount}
             collectionRate={collectionRate}
             formatter={formatter}
           />
@@ -1747,9 +1766,3 @@ export default function App() {
     </div>
   );
 }
-  function handleScreenChange(nextScreen) {
-    setActiveScreen(nextScreen);
-    if (nextScreen === "payment") {
-      setPaymentStudentId("");
-    }
-  }
