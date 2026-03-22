@@ -419,7 +419,7 @@ button {
 
 @media (max-width: 719px) {
   .compact-student-table {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .compact-student-table .student-list-head {
@@ -427,19 +427,31 @@ button {
   }
 
   .compact-student-table .student-list-row {
-    padding: 10px;
-    gap: 6px;
+    grid-template-columns: minmax(0, 1.3fr) auto auto;
+    align-items: center;
+    padding: 10px 12px;
+    gap: 8px;
     border-radius: 14px;
-    min-height: 128px;
-    align-content: start;
+    min-height: 0;
   }
 
   .compact-student-table .student-list-row > div::before {
     display: none;
   }
 
+  .compact-student-table .cell-name .tiny-copy,
+  .compact-student-table .cell-due .due-breakdown-line {
+    display: none;
+  }
+
+  .compact-student-table .cell-due {
+    justify-items: end;
+  }
+
   .compact-student-table .cell-actions {
-    margin-top: auto;
+    margin-top: 0;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
   }
 
   .compact-student-table .no-due-label {

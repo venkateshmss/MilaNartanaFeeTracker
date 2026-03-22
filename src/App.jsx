@@ -792,7 +792,7 @@ function StudentsScreen({
               <button
                 type="button"
                 className="ghost-button icon-action"
-                onClick={() => onQuickAddPayment(row.student.student_id)}
+                onClick={() => onQuickAddPayment(row.student.student_id, monthFilter)}
               >
                 +Pay
               </button>
@@ -1316,6 +1316,7 @@ export default function App() {
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [monthKey, setMonthKey] = useState("");
   const [paymentStudentId, setPaymentStudentId] = useState("");
+  const [paymentMonthOverride, setPaymentMonthOverride] = useState("");
   const [localStudents, setLocalStudents] = useState(initialStudents);
   const [localMonthlyFees, setLocalMonthlyFees] = useState(initialMonthlyFees);
   const [appSettings, setAppSettings] = useState(settings);
@@ -1610,11 +1611,28 @@ export default function App() {
   }, [expectedAmount, totalAmount]);
   const debugStatus = useMemo(() => getSheetsDebugStatus(), [debugTick, loadError, isLoading]);
   const reminderGroups = useMemo(
-    () =>
-      groupPendingDuesByStudent(localStudents, localMonthlyFees).filter(
-        (student) => student.status === "Active",
-      ),
-    [localStudents, localMonthlyFees],
+    () => {
+      const now = new Date();
+      const currentMonth = getCurrentMonthKey();
+      const reminderDay = Number(appSettings.reminder_day || 5);
+
+      return groupPendingDuesByStudent(localStudents, localMonthlyFees)
+        .map((student) => {
+          const eligibleDueRows = student.dueRows.filter((fee) => {
+            const feeMonth = normalizeMonthKey(fee.month_key);
+            if (!feeMonth || feeMonth > currentMonth) return false;
+            return isReminderDueForMonth(feeMonth, reminderDay, now);
+          });
+          if (!eligibleDueRows.length) return null;
+          return {
+            ...student,
+            dueRows: eligibleDueRows,
+            totalDue: eligibleDueRows.reduce((sum, fee) => sum + Number(fee.balance_due || 0), 0),
+          };
+        })
+        .filter((student) => student && student.status === "Active");
+    },
+    [appSettings.reminder_day, localMonthlyFees, localStudents],
   );
   const reminderMetaByStudentId = useMemo(() => {
     return reminderGroups.reduce((acc, student) => {
@@ -1646,8 +1664,9 @@ export default function App() {
     [localMonthlyFees, selectedStudentId],
   );
 
-  function openPaymentForStudent(studentId) {
+  function openPaymentForStudent(studentId, monthKeyOverride = "") {
     setPaymentStudentId(studentId);
+    setPaymentMonthOverride(normalizeMonthKey(monthKeyOverride));
     setActiveScreen("payment");
   }
 
@@ -1659,6 +1678,7 @@ export default function App() {
     setActiveScreen(nextScreen);
     if (nextScreen === "payment") {
       setPaymentStudentId("");
+      setPaymentMonthOverride("");
     }
   }
 
@@ -1727,7 +1747,7 @@ export default function App() {
             onAddPaymentRow={addPaymentRow}
             isSavingPayment={isSavingPayment}
             initialStudentId={paymentStudentId}
-            selectedMonthKey={monthKey}
+            selectedMonthKey={paymentMonthOverride || monthKey}
           />
         )}
         {activeScreen === "reminders" && (
