@@ -61,7 +61,7 @@ This app supports a lightweight passcode gate without OAuth.
    - Copy output into `PASSCODE_HASH`.
 3. Redeploy Vercel.
 4. App behavior:
-   - Unauthenticated users are redirected to `/login`.
+   - Unauthenticated users see the in-app login screen.
    - `/api/sheets` is blocked unless session cookie is valid.
    - 5 failed attempts trigger a temporary lockout.
 

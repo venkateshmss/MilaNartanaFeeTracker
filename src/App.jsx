@@ -1424,15 +1424,6 @@ export default function App() {
   }, [authGateEnabled]);
 
   useEffect(() => {
-    if (!authGateEnabled || authChecking) return;
-    if (authenticated && window.location.pathname === "/login") {
-      window.history.replaceState({}, "", "/");
-    } else if (!authenticated && window.location.pathname !== "/login") {
-      window.history.replaceState({}, "", "/login");
-    }
-  }, [authChecking, authGateEnabled, authenticated]);
-
-  useEffect(() => {
     let isMounted = true;
 
     async function loadFromSheets() {
@@ -1795,7 +1786,6 @@ export default function App() {
       setAuthenticated(true);
       setAuthError("");
       setLockoutUntil("");
-      window.history.replaceState({}, "", "/");
       setIsLoading(true);
       return true;
     } catch {
@@ -1815,7 +1805,6 @@ export default function App() {
       setAuthenticated(false);
       setSelectedStudentId("");
       setLoadError("");
-      window.history.replaceState({}, "", "/login");
     }
   }
 
