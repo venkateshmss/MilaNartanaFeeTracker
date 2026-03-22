@@ -80,6 +80,7 @@ button {
   display: grid;
   place-items: center;
   text-align: center;
+  position: relative;
 }
 
 .topbar h1,
@@ -132,6 +133,12 @@ button {
   letter-spacing: 0.02em;
 }
 
+.logout-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+}
+
 .eyebrow {
   margin: 0 0 6px;
   font-size: 0.72rem;
@@ -168,6 +175,15 @@ button {
 
 .panel {
   padding: 16px;
+}
+
+.auth-panel {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.auth-form {
+  grid-template-columns: 1fr;
 }
 
 .stack-lg {

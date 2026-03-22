@@ -1,3 +1,5 @@
+import { getSessionFromRequest } from "./auth/_auth.js";
+
 const READ_ACTIONS = ["health", "fetchAll"];
 const WRITE_ACTIONS = [
   "updateStudentStatus",
@@ -18,6 +20,11 @@ function hasBody(req) {
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     return json(res, 405, { ok: false, error: "Method not allowed" });
+  }
+
+  const session = getSessionFromRequest(req);
+  if (!session) {
+    return json(res, 401, { ok: false, error: "Unauthorized" });
   }
 
   const webAppUrl = process.env.SHEETS_WEB_APP_URL || "";
