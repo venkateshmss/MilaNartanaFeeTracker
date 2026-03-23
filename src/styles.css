@@ -425,6 +425,34 @@ button {
   font-size: 0.86rem;
 }
 
+.bulk-payment-block {
+  border-top: 1px dashed rgba(130, 164, 255, 0.3);
+  padding-top: 14px;
+}
+
+.bulk-lines-field {
+  gap: 10px;
+}
+
+.bulk-lines {
+  display: grid;
+  gap: 8px;
+}
+
+.bulk-line-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(100px, 0.5fr);
+  gap: 8px;
+}
+
+.bulk-line-row .bulk-remove-btn {
+  grid-column: 1 / -1;
+}
+
+.bulk-add-btn {
+  width: fit-content;
+}
+
 .student-list-table {
   display: grid;
   gap: 8px;
@@ -876,6 +904,65 @@ button {
   color: #ff7d86;
 }
 
+.dashboard-channel-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+}
+
+.dashboard-channel-card {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(230, 228, 220, 0.12);
+  padding: 14px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+}
+
+.dashboard-channel-icon {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.35rem;
+}
+
+.dashboard-channel-icon.cash {
+  background: rgba(41, 166, 130, 0.2);
+}
+
+.dashboard-channel-icon.online {
+  background: rgba(69, 131, 210, 0.2);
+}
+
+.dashboard-channel-body {
+  display: grid;
+  gap: 2px;
+}
+
+.dashboard-channel-title {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 1rem;
+}
+
+.dashboard-channel-value {
+  margin: 0;
+  color: #ffffff;
+  font-size: 2rem;
+  line-height: 1.05;
+}
+
+.dashboard-channel-sub {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.95rem;
+}
+
 .dashboard-progress-card {
   display: grid;
   gap: 14px;
@@ -996,6 +1083,10 @@ button {
     font-size: 0.92rem;
   }
 
+  .dashboard-channel-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .collection-rate-box strong {
     font-size: 2rem;
   }
@@ -1027,6 +1118,19 @@ button {
 
   .payment-form {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .bulk-lines-field {
+    grid-column: 1 / -1;
+  }
+
+  .bulk-line-row {
+    grid-template-columns: minmax(0, 1fr) minmax(130px, 0.45fr) auto;
+    align-items: center;
+  }
+
+  .bulk-line-row .bulk-remove-btn {
+    grid-column: auto;
   }
 
   .student-list-head {
