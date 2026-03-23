@@ -31,6 +31,7 @@ const screenLabels = {
   payment: "Add Payment",
   reminders: "Reminders",
 };
+const PAYMENT_STATUS_OPTIONS = ["Paid", "Partial", "Pending"];
 
 function formatMonthLabel(monthKey) {
   const [year, month] = monthKey.split("-");
@@ -291,6 +292,7 @@ function Dashboard({
   partialCollectedAmount,
   collectionRate,
   formatter,
+  onOpenStudentsFiltered,
 }) {
   const monthInputRef = useRef(null);
   const monthLabel = monthChoices.find((option) => option.key === monthKey)?.label ?? monthKey;
@@ -305,6 +307,12 @@ function Dashboard({
   const pendingPercent = expectedSafe > 0 ? Math.round((pendingSafe / expectedSafe) * 100) : 0;
   const progressPercent = (value) =>
     expectedSafe > 0 ? Math.max(0, Math.min(100, (Number(value || 0) / expectedSafe) * 100)) : 0;
+  function openStudentsWithStatuses(statuses) {
+    onOpenStudentsFiltered({
+      monthKey,
+      paymentStatuses: statuses,
+    });
+  }
 
   return (
     <section className="panel stack-lg">
@@ -392,7 +400,11 @@ function Dashboard({
         </div>
 
         <div className="dashboard-progress-card">
-          <div className="collection-row">
+          <button
+            type="button"
+            className="collection-row collection-row-button"
+            onClick={() => openStudentsWithStatuses(["Paid"])}
+          >
             <div className="collection-row-head">
               <span>Fully paid</span>
               <strong>{formatter.format(fullPaidSafe)} / {formatter.format(expectedSafe)}</strong>
@@ -400,9 +412,13 @@ function Dashboard({
             <div className="progress-track">
               <div className="progress-fill progress-fill-paid" style={{ width: `${progressPercent(fullPaidSafe)}%` }} />
             </div>
-          </div>
+          </button>
 
-          <div className="collection-row">
+          <button
+            type="button"
+            className="collection-row collection-row-button"
+            onClick={() => openStudentsWithStatuses(["Partial"])}
+          >
             <div className="collection-row-head">
               <span>Partial payments</span>
               <strong>{formatter.format(partialSafe)} / {formatter.format(expectedSafe)}</strong>
@@ -410,19 +426,29 @@ function Dashboard({
             <div className="progress-track">
               <div className="progress-fill progress-fill-partial" style={{ width: `${progressPercent(partialSafe)}%` }} />
             </div>
-          </div>
+          </button>
 
-          <div className="collection-row">
+          <button
+            type="button"
+            className="collection-row collection-row-button"
+            onClick={() => openStudentsWithStatuses(["Paid", "Partial"])}
+          >
             <div className="collection-row-head">
               <span>Total collected</span>
               <strong>{formatter.format(collectedSafe)} / {formatter.format(expectedSafe)}</strong>
             </div>
-            <div className="progress-track">
+            <div
+              className="progress-track"
+            >
               <div className="progress-fill progress-fill-total" style={{ width: `${progressPercent(collectedSafe)}%` }} />
             </div>
-          </div>
+          </button>
 
-          <div className="collection-row">
+          <button
+            type="button"
+            className="collection-row collection-row-button"
+            onClick={() => openStudentsWithStatuses(["Pending"])}
+          >
             <div className="collection-row-head">
               <span>Pending recovery</span>
               <strong>{formatter.format(pendingSafe)} / {formatter.format(expectedSafe)}</strong>
@@ -430,12 +456,16 @@ function Dashboard({
             <div className="progress-track">
               <div className="progress-fill progress-fill-pending" style={{ width: `${progressPercent(pendingSafe)}%` }} />
             </div>
-          </div>
+          </button>
 
-          <div className="collection-rate-box">
+          <button
+            type="button"
+            className="collection-rate-box collection-row-button"
+            onClick={() => openStudentsWithStatuses(["Paid", "Partial"])}
+          >
             <span>Collection rate</span>
             <strong>{collectionRate}%</strong>
-          </div>
+          </button>
         </div>
       </div>
     </section>
@@ -453,11 +483,14 @@ function StudentsScreen({
   onQuickAddPayment,
   reminderMetaByStudentId,
   monthChoices,
+  monthFilter,
+  onMonthFilterChange,
+  paymentStatusFilter,
+  onPaymentStatusFilterChange,
 }) {
   const monthFilterInputRef = useRef(null);
   const [query, setQuery] = useState("");
   const [location, setLocation] = useState("All");
-  const [monthFilter, setMonthFilter] = useState(() => getCurrentMonthKey());
   const [toggleDraft, setToggleDraft] = useState(null);
   const [showAddForm, setShowAddForm] = useState(false);
   const [newStudent, setNewStudent] = useState({
@@ -518,7 +551,7 @@ function StudentsScreen({
         ];
       }
 
-      if (hasNameSearch && fullHistory.length) {
+      if ((hasNameSearch || paymentStatusFilter.length > 0) && fullHistory.length) {
         return fullHistory.map((fee) => ({
           key: `${student.student_id}-${fee.month_key}-history`,
           student,
@@ -557,7 +590,20 @@ function StudentsScreen({
         },
       ];
     });
-  }, [monthChoices, monthFilter, query, visibleStudents]);
+  }, [monthChoices, monthFilter, paymentStatusFilter.length, query, visibleStudents]);
+  const filteredStudentRows = useMemo(() => {
+    if (!paymentStatusFilter.length) return studentRows;
+    return studentRows.filter((row) => paymentStatusFilter.includes(row.monthStatus));
+  }, [paymentStatusFilter, studentRows]);
+
+  function togglePaymentStatus(status) {
+    const exists = paymentStatusFilter.includes(status);
+    onPaymentStatusFilterChange(
+      exists
+        ? paymentStatusFilter.filter((s) => s !== status)
+        : [...paymentStatusFilter, status],
+    );
+  }
 
   function requestToggle(student) {
     const nextStatus = student.status === "Active" ? "Inactive" : "Active";
@@ -610,7 +656,7 @@ function StudentsScreen({
           <p className="eyebrow">Student status</p>
           <h2>Month-wise payment status</h2>
         </div>
-        <p className="section-copy">Filter by month and location, then review due months.</p>
+        <p className="section-copy">Filter by month, location, and payment status.</p>
       </div>
 
       <div className="filters-row">
@@ -637,7 +683,7 @@ function StudentsScreen({
                   value={monthFilter}
                   min={monthChoices[0]?.key || ""}
                   max={monthChoices[monthChoices.length - 1]?.key || ""}
-                  onChange={(event) => setMonthFilter(event.target.value)}
+                  onChange={(event) => onMonthFilterChange(event.target.value)}
                 />
                 <button
                   type="button"
@@ -652,14 +698,14 @@ function StudentsScreen({
               <button
                 type="button"
                 className="ghost-button"
-                onClick={() => setMonthFilter("")}
+                onClick={() => onMonthFilterChange("")}
                 disabled={!monthFilter}
               >
                 All
               </button>
             </div>
           ) : (
-            <select value={monthFilter} onChange={(event) => setMonthFilter(event.target.value)}>
+            <select value={monthFilter} onChange={(event) => onMonthFilterChange(event.target.value)}>
               <option value="">All months</option>
               {monthChoices.map((item) => (
                 <option key={item.key} value={item.key}>
@@ -691,6 +737,34 @@ function StudentsScreen({
             ))}
           </select>
         </label>
+
+        <div className="field">
+          <span>Payment status</span>
+          <div className="status-chip-group">
+            {PAYMENT_STATUS_OPTIONS.map((status) => {
+              const active = paymentStatusFilter.includes(status);
+              return (
+                <button
+                  key={status}
+                  type="button"
+                  className={`status-chip ${active ? "status-chip-active" : ""}`}
+                  onClick={() => togglePaymentStatus(status)}
+                >
+                  {status}
+                </button>
+              );
+            })}
+            {paymentStatusFilter.length > 0 ? (
+              <button
+                type="button"
+                className="ghost-button status-clear"
+                onClick={() => onPaymentStatusFilterChange([])}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </div>
 
       </div>
 
@@ -807,7 +881,7 @@ function StudentsScreen({
           <span>Actions</span>
         </div>
 
-        {studentRows.map((row) => (
+        {filteredStudentRows.map((row) => (
           <div key={row.key} className="student-list-row" role="row">
             <div data-label="Name" className="cell-name">
               <button
@@ -856,6 +930,13 @@ function StudentsScreen({
             </div>
           </div>
         ))}
+        {!filteredStudentRows.length ? (
+          <div className="student-list-row" role="row">
+            <div className="cell-name">
+              <p className="tiny-copy">No students found for selected filters.</p>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {toggleDraft && (
@@ -1365,6 +1446,8 @@ export default function App() {
   const [lockoutUntil, setLockoutUntil] = useState("");
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [monthKey, setMonthKey] = useState("");
+  const [studentsMonthFilter, setStudentsMonthFilter] = useState(() => getCurrentMonthKey());
+  const [studentsPaymentStatusFilter, setStudentsPaymentStatusFilter] = useState([]);
   const [paymentStudentId, setPaymentStudentId] = useState("");
   const [paymentMonthOverride, setPaymentMonthOverride] = useState("");
   const [localStudents, setLocalStudents] = useState(initialStudents);
@@ -1440,6 +1523,7 @@ export default function App() {
       }
 
       try {
+        setIsLoading(true);
         const data = await fetchAllSheetsData();
         if (!isMounted) return;
         setLocalStudents(data.students);
@@ -1767,6 +1851,15 @@ export default function App() {
     setSelectedStudentId(studentId);
   }
 
+  function openStudentsWithFilters({
+    monthKey: targetMonthKey = monthKey,
+    paymentStatuses = [],
+  }) {
+    setStudentsMonthFilter(normalizeMonthKey(targetMonthKey));
+    setStudentsPaymentStatusFilter(paymentStatuses);
+    setActiveScreen("students");
+  }
+
   async function handleLogin(passcode) {
     setAuthSubmitting(true);
     setAuthError("");
@@ -1880,6 +1973,7 @@ export default function App() {
             partialCollectedAmount={partialCollectedAmount}
             collectionRate={collectionRate}
             formatter={formatter}
+            onOpenStudentsFiltered={openStudentsWithFilters}
           />
         )}
         {activeScreen === "students" && (
@@ -1894,6 +1988,10 @@ export default function App() {
             onQuickAddPayment={openPaymentForStudent}
             reminderMetaByStudentId={reminderMetaByStudentId}
             monthChoices={monthChoices}
+            monthFilter={studentsMonthFilter}
+            onMonthFilterChange={setStudentsMonthFilter}
+            paymentStatusFilter={studentsPaymentStatusFilter}
+            onPaymentStatusFilterChange={setStudentsPaymentStatusFilter}
           />
         )}
         {activeScreen === "payment" && (
