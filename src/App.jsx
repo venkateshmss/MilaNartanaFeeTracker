@@ -234,6 +234,51 @@ function ScreenNav({ activeScreen, onChange }) {
   );
 }
 
+function LoginScreen({ isSubmitting, error, lockoutUntil, onLogin }) {
+  const [passcode, setPasscode] = useState("");
+
+  async function submit(event) {
+    event.preventDefault();
+    await onLogin(passcode);
+  }
+
+  return (
+    <div className="app-shell">
+      <main className="app-frame">
+        <header className="topbar">
+          <div className="brand-wrap">
+            <h1 className="brand-title">Mila Nartana Fee Tracker</h1>
+            <p className="topbar-copy">Enter passcode to continue</p>
+          </div>
+        </header>
+
+        <section className="panel auth-panel">
+          <form className="payment-form auth-form" onSubmit={submit}>
+            <label className="field">
+              <span>Passcode</span>
+              <input
+                type="password"
+                autoFocus
+                required
+                value={passcode}
+                onChange={(event) => setPasscode(event.target.value)}
+                placeholder="Enter passcode"
+              />
+            </label>
+            <button type="submit" className="primary-button" disabled={isSubmitting}>
+              {isSubmitting ? "Checking..." : "Unlock"}
+            </button>
+          </form>
+          {error ? <div className="info-card muted">{error}</div> : null}
+          {lockoutUntil ? (
+            <p className="tiny-copy">Locked until: {formatReadableDateTime(lockoutUntil)}</p>
+          ) : null}
+        </section>
+      </main>
+    </div>
+  );
+}
+
 function Dashboard({
   monthKey,
   monthChoices,
@@ -792,7 +837,7 @@ function StudentsScreen({
               <button
                 type="button"
                 className="ghost-button icon-action"
-                onClick={() => onQuickAddPayment(row.student.student_id)}
+                onClick={() => onQuickAddPayment(row.student.student_id, monthFilter)}
               >
                 +Pay
               </button>
@@ -1313,9 +1358,15 @@ function ReminderQueue({ reminderGroups, formatter, appSettings }) {
 }
 
 export default function App() {
+  const [authChecking, setAuthChecking] = useState(true);
+  const [authenticated, setAuthenticated] = useState(false);
+  const [authSubmitting, setAuthSubmitting] = useState(false);
+  const [authError, setAuthError] = useState("");
+  const [lockoutUntil, setLockoutUntil] = useState("");
   const [activeScreen, setActiveScreen] = useState("dashboard");
   const [monthKey, setMonthKey] = useState("");
   const [paymentStudentId, setPaymentStudentId] = useState("");
+  const [paymentMonthOverride, setPaymentMonthOverride] = useState("");
   const [localStudents, setLocalStudents] = useState(initialStudents);
   const [localMonthlyFees, setLocalMonthlyFees] = useState(initialMonthlyFees);
   const [appSettings, setAppSettings] = useState(settings);
@@ -1330,13 +1381,56 @@ export default function App() {
   const [successModal, setSuccessModal] = useState(null);
   const [debugTick, setDebugTick] = useState(0);
   const debugEnabled = isDebugModeEnabled();
+  const authGateEnabled = true;
 
   const hasSheetsEndpoint = hasSheetsEndpointConfigured();
 
   useEffect(() => {
     let isMounted = true;
 
+    async function bootstrapSession() {
+      if (!authGateEnabled) {
+        if (!isMounted) return;
+        setAuthenticated(true);
+        setAuthChecking(false);
+        return;
+      }
+
+      try {
+        const response = await fetch("/api/auth/session");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const body = await response.json();
+        if (!isMounted) return;
+        setAuthenticated(Boolean(body?.authenticated));
+        setAuthError("");
+      } catch (error) {
+        if (!isMounted) return;
+        if (import.meta.env.DEV) {
+          setAuthenticated(true);
+          setAuthError("");
+        } else {
+          setAuthenticated(false);
+          setAuthError("Authentication check failed. Please refresh and try again.");
+        }
+      } finally {
+        if (isMounted) setAuthChecking(false);
+      }
+    }
+
+    bootstrapSession();
+    return () => {
+      isMounted = false;
+    };
+  }, [authGateEnabled]);
+
+  useEffect(() => {
+    let isMounted = true;
+
     async function loadFromSheets() {
+      if (!authenticated) {
+        setIsLoading(false);
+        return;
+      }
       if (!hasSheetsEndpoint) {
         setIsLoading(false);
         setLoadError(
@@ -1366,7 +1460,7 @@ export default function App() {
     return () => {
       isMounted = false;
     };
-  }, [hasSheetsEndpoint]);
+  }, [authenticated, hasSheetsEndpoint]);
 
   useEffect(() => {
     if (!debugEnabled) return undefined;
@@ -1610,11 +1704,28 @@ export default function App() {
   }, [expectedAmount, totalAmount]);
   const debugStatus = useMemo(() => getSheetsDebugStatus(), [debugTick, loadError, isLoading]);
   const reminderGroups = useMemo(
-    () =>
-      groupPendingDuesByStudent(localStudents, localMonthlyFees).filter(
-        (student) => student.status === "Active",
-      ),
-    [localStudents, localMonthlyFees],
+    () => {
+      const now = new Date();
+      const currentMonth = getCurrentMonthKey();
+      const reminderDay = Number(appSettings.reminder_day || 5);
+
+      return groupPendingDuesByStudent(localStudents, localMonthlyFees)
+        .map((student) => {
+          const eligibleDueRows = student.dueRows.filter((fee) => {
+            const feeMonth = normalizeMonthKey(fee.month_key);
+            if (!feeMonth || feeMonth > currentMonth) return false;
+            return isReminderDueForMonth(feeMonth, reminderDay, now);
+          });
+          if (!eligibleDueRows.length) return null;
+          return {
+            ...student,
+            dueRows: eligibleDueRows,
+            totalDue: eligibleDueRows.reduce((sum, fee) => sum + Number(fee.balance_due || 0), 0),
+          };
+        })
+        .filter((student) => student && student.status === "Active");
+    },
+    [appSettings.reminder_day, localMonthlyFees, localStudents],
   );
   const reminderMetaByStudentId = useMemo(() => {
     return reminderGroups.reduce((acc, student) => {
@@ -1646,8 +1757,9 @@ export default function App() {
     [localMonthlyFees, selectedStudentId],
   );
 
-  function openPaymentForStudent(studentId) {
+  function openPaymentForStudent(studentId, monthKeyOverride = "") {
     setPaymentStudentId(studentId);
+    setPaymentMonthOverride(normalizeMonthKey(monthKeyOverride));
     setActiveScreen("payment");
   }
 
@@ -1655,11 +1767,74 @@ export default function App() {
     setSelectedStudentId(studentId);
   }
 
+  async function handleLogin(passcode) {
+    setAuthSubmitting(true);
+    setAuthError("");
+    setLockoutUntil("");
+    try {
+      const response = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ passcode }),
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body?.ok) {
+        setAuthError(body?.error || "Login failed");
+        if (body?.lockedUntil) setLockoutUntil(body.lockedUntil);
+        return false;
+      }
+      setAuthenticated(true);
+      setAuthError("");
+      setLockoutUntil("");
+      setIsLoading(true);
+      return true;
+    } catch {
+      setAuthError("Login request failed. Please try again.");
+      return false;
+    } finally {
+      setAuthSubmitting(false);
+    }
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch("/api/auth/logout", { method: "POST" });
+    } catch {
+      // Keep logout local state even if network call fails.
+    } finally {
+      setAuthenticated(false);
+      setSelectedStudentId("");
+      setLoadError("");
+    }
+  }
+
   function handleScreenChange(nextScreen) {
     setActiveScreen(nextScreen);
     if (nextScreen === "payment") {
       setPaymentStudentId("");
+      setPaymentMonthOverride("");
     }
+  }
+
+  if (authGateEnabled && authChecking) {
+    return (
+      <div className="app-shell">
+        <main className="app-frame">
+          <div className="info-card">Checking session...</div>
+        </main>
+      </div>
+    );
+  }
+
+  if (authGateEnabled && !authenticated) {
+    return (
+      <LoginScreen
+        isSubmitting={authSubmitting}
+        error={authError}
+        lockoutUntil={lockoutUntil}
+        onLogin={handleLogin}
+      />
+    );
   }
 
   return (
@@ -1681,6 +1856,9 @@ export default function App() {
             )}
             <h1 className="brand-title">Mila Nartana Fee Tracker</h1>
           </div>
+          <button type="button" className="ghost-button logout-btn" onClick={handleLogout}>
+            Logout
+          </button>
         </header>
 
         <ScreenNav activeScreen={activeScreen} onChange={handleScreenChange} />
@@ -1727,7 +1905,7 @@ export default function App() {
             onAddPaymentRow={addPaymentRow}
             isSavingPayment={isSavingPayment}
             initialStudentId={paymentStudentId}
-            selectedMonthKey={monthKey}
+            selectedMonthKey={paymentMonthOverride || monthKey}
           />
         )}
         {activeScreen === "reminders" && (

@@ -44,6 +44,27 @@ Simple mobile-first React demo for tracking month-wise dance class fee payments,
 8. In production, frontend calls `/api/sheets` so token is never exposed in browser bundle.
 9. Restart `npm run dev` after `.env` changes.
 
+## Access Security (Vercel)
+
+This app supports a lightweight passcode gate without OAuth.
+
+1. Add Vercel server env vars:
+   - `SHEETS_WEB_APP_URL`
+   - `SHEETS_WRITE_TOKEN`
+   - `PASSCODE_HASH`
+   - `AUTH_COOKIE_SECRET`
+   - `AUTH_SESSION_DAYS=7`
+   - `AUTH_MAX_ATTEMPTS=5`
+   - `AUTH_LOCKOUT_MINUTES=15`
+2. Generate a passcode hash locally:
+   - `npm run generate:passcode-hash`
+   - Copy output into `PASSCODE_HASH`.
+3. Redeploy Vercel.
+4. App behavior:
+   - Unauthenticated users see the in-app login screen.
+   - `/api/sheets` is blocked unless session cookie is valid.
+   - 5 failed attempts trigger a temporary lockout.
+
 ## Troubleshooting `Failed to fetch`
 
 1. Confirm `.env` is in project root (not inside `sample-data`).
