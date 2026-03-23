@@ -92,9 +92,9 @@ function doPost(e) {
 function fetchAll_() {
   assertSheetSchema_();
   return {
-    students: readRows_(STUDENTS_SHEET),
-    monthlyFees: readRows_(MONTHLY_FEES_SHEET),
-    settings: rowsToSettings_(readRows_(SETTINGS_SHEET)),
+    students: readRowsByColumns_(STUDENTS_SHEET, REQUIRED_STUDENT_COLUMNS),
+    monthlyFees: readRowsByColumns_(MONTHLY_FEES_SHEET, REQUIRED_MONTHLY_FEE_COLUMNS),
+    settings: rowsToSettings_(readRowsByColumns_(SETTINGS_SHEET, REQUIRED_SETTINGS_COLUMNS)),
   };
 }
 
@@ -168,6 +168,36 @@ function readRows_(sheetName) {
     });
     return obj;
   });
+}
+
+function readRowsByColumns_(sheetName, requiredColumns) {
+  const sheet = SpreadsheetApp.getActive().getSheetByName(sheetName);
+  if (!sheet) throw new Error(`Missing sheet: ${sheetName}`);
+
+  const headers = getHeaders_(sheet);
+  if (!headers.length || sheet.getLastRow() < 2) return [];
+
+  const columnIndexes = requiredColumns.map((col) => findColumnIndex_(headers, col));
+  const maxRequiredIndex = Math.max.apply(null, columnIndexes);
+  const rowCount = sheet.getLastRow() - 1;
+
+  // Read only up to the right-most required column (avoids scanning unrelated trailing columns).
+  const values = sheet.getRange(2, 1, rowCount, maxRequiredIndex + 1).getValues();
+  const rows = values.map((row) => {
+    const obj = {};
+    requiredColumns.forEach((columnName, i) => {
+      obj[columnName] = row[columnIndexes[i]];
+    });
+    return obj;
+  });
+
+  // Drop empty trailing/placeholder rows.
+  return rows.filter((row) =>
+    requiredColumns.some((columnName) => {
+      const value = row[columnName];
+      return value !== "" && value !== null && value !== undefined;
+    }),
+  );
 }
 
 function rowsToSettings_(rows) {
