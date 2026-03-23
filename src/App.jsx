@@ -32,6 +32,41 @@ const screenLabels = {
   reminders: "Reminders",
 };
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Partial", "Pending"];
+const SHEETS_CACHE_KEY = "mnft.sheets_cache_v1";
+
+function readSheetsCache() {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(SHEETS_CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    const students = Array.isArray(parsed.students) ? parsed.students : null;
+    const monthlyFees = Array.isArray(parsed.monthlyFees) ? parsed.monthlyFees : null;
+    const settings = parsed.settings && typeof parsed.settings === "object" ? parsed.settings : null;
+    if (!students || !monthlyFees || !settings) return null;
+    return { students, monthlyFees, settings };
+  } catch {
+    return null;
+  }
+}
+
+function writeSheetsCache(snapshot) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      SHEETS_CACHE_KEY,
+      JSON.stringify({
+        students: snapshot.students || [],
+        monthlyFees: snapshot.monthlyFees || [],
+        settings: snapshot.settings || {},
+        cachedAt: new Date().toISOString(),
+      }),
+    );
+  } catch {
+    // Ignore storage failures.
+  }
+}
 
 function formatMonthLabel(monthKey) {
   const [year, month] = monthKey.split("-");
@@ -447,7 +482,7 @@ function Dashboard({
           <button
             type="button"
             className="collection-row collection-row-button"
-            onClick={() => openStudentsWithStatuses(["Pending"])}
+            onClick={() => openStudentsWithStatuses(["Pending", "Partial"])}
           >
             <div className="collection-row-head">
               <span>Pending recovery</span>
@@ -1463,6 +1498,7 @@ export default function App() {
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [successModal, setSuccessModal] = useState(null);
   const [debugTick, setDebugTick] = useState(0);
+  const [hasHydratedSheetsData, setHasHydratedSheetsData] = useState(false);
   const debugEnabled = isDebugModeEnabled();
   const authGateEnabled = true;
 
@@ -1514,27 +1550,48 @@ export default function App() {
         setIsLoading(false);
         return;
       }
+
+      const cached = readSheetsCache();
+      const hasCachedData = Boolean(cached);
+      if (hasCachedData) {
+        if (!isMounted) return;
+        setLocalStudents(cached.students);
+        setLocalMonthlyFees(cached.monthlyFees);
+        setAppSettings(cached.settings);
+        setHasHydratedSheetsData(true);
+        setIsLoading(false);
+      }
+
       if (!hasSheetsEndpoint) {
+        if (!isMounted) return;
         setIsLoading(false);
         setLoadError(
-          "Google Sheets endpoint is not configured. Set VITE_SHEETS_WEB_APP_URL in .env to load real data.",
+          hasCachedData
+            ? "Google Sheets endpoint is not configured. Showing cached data."
+            : "Google Sheets endpoint is not configured. Set VITE_SHEETS_WEB_APP_URL in .env to load real data.",
         );
         return;
       }
 
       try {
-        setIsLoading(true);
+        if (!hasCachedData) setIsLoading(true);
         const data = await fetchAllSheetsData();
         if (!isMounted) return;
         setLocalStudents(data.students);
         setLocalMonthlyFees(data.monthlyFees);
         setAppSettings(data.settings);
+        setHasHydratedSheetsData(true);
+        writeSheetsCache(data);
         setLoadError("");
       } catch (error) {
         if (!isMounted) return;
-        setLoadError(
-          `Could not load Google Sheets data: ${error.message}. Showing local sample data.`,
-        );
+        if (!hasCachedData) {
+          setLoadError(
+            `Could not load Google Sheets data: ${error.message}. Showing local sample data.`,
+          );
+        } else {
+          setLoadError(`Could not refresh Google Sheets data: ${error.message}. Showing cached data.`);
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -1545,6 +1602,15 @@ export default function App() {
       isMounted = false;
     };
   }, [authenticated, hasSheetsEndpoint]);
+
+  useEffect(() => {
+    if (!authenticated || !hasHydratedSheetsData) return;
+    writeSheetsCache({
+      students: localStudents,
+      monthlyFees: localMonthlyFees,
+      settings: appSettings,
+    });
+  }, [appSettings, authenticated, hasHydratedSheetsData, localMonthlyFees, localStudents]);
 
   useEffect(() => {
     if (!debugEnabled) return undefined;
