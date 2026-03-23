@@ -25,15 +25,15 @@ Simple mobile-first React demo for tracking month-wise dance class fee payments,
 - `src/utils/feeTracker.js` contains the reusable month filtering, summary, grouping, and reminder helpers.
 - Replace the mock arrays in `src/App.jsx` with Sheet fetch/write logic when ready.
 - Integration scaffold is in `src/services/googleSheetsService.js`.
-- Import-ready sample files are in `sample-data/`.
+- Import-ready sample files are in `data/samples/`.
 
 ## Real Sheets hookup (recommended)
 
 1. Create a Google Sheet with tabs: `Students`, `MonthlyFees`, `Settings`.
-2. Copy data from the CSVs in `sample-data/` into those tabs.
+2. Copy data from the CSVs in `data/samples/` into those tabs.
 3. Create a Google Apps Script attached to that sheet and deploy it as a Web App.
 4. Implement `doPost` actions: `fetchAll`, `updateStudentStatus`, `addMonthlyFeeRow`.
-   A starter script is available at `sample-data/apps-script-example.gs`.
+   Deploy script is available at `google-apps-script/fee-tracker-api.gs`.
 5. Deploy Apps Script as Web App:
    - Execute as: Me
    - Who has access: Anyone with the link (or your Google Workspace users)

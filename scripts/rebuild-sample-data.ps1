@@ -1,7 +1,7 @@
 param(
-  [string]$MonthlyFeesPath = "sample-data/MonthlyFees.sample.csv",
-  [string]$SettingsPath = "sample-data/Settings.sample.csv",
-  [string]$StudentsOutPath = "sample-data/Students.sample.csv",
+  [string]$MonthlyFeesPath = "data/samples/MonthlyFees.sample.csv",
+  [string]$SettingsPath = "data/samples/Settings.sample.csv",
+  [string]$StudentsOutPath = "data/samples/Students.sample.csv",
   [string]$ParentDetailsPath = "c:\Users\VenkateshSooryakala\Downloads\Parent_details.csv",
   [string]$MockDataOutPath = "src/data/mockData.js"
 )
