@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   monthOptions,
-  paymentFormDefaults,
   settings,
   students as initialStudents,
   monthlyFees as initialMonthlyFees,
@@ -18,6 +17,7 @@ import {
 import {
   addMonthlyFeeRow,
   addStudentRow,
+  deleteMonthlyFeeRows,
   fetchAllSheetsData,
   getSheetsDebugStatus,
   hasSheetsEndpointConfigured,
@@ -204,9 +204,17 @@ function getDueAmountClass(status, dueAmount) {
 }
 
 function sortTransactionHistory(rows) {
-  return [...rows].sort((a, b) =>
-    String(b.payment_date || "").localeCompare(String(a.payment_date || "")),
-  );
+  return [...rows]
+    .filter((row) => {
+      const status = String(row.status || "").trim().toLowerCase();
+      const amountPaid = Number(row.amount_paid || 0);
+      const hasPaymentDate = Boolean(parseDateValue(row.payment_date));
+      // Fee history should show only real payment events.
+      return amountPaid > 0 && hasPaymentDate && status !== "pending";
+    })
+    .sort((a, b) =>
+      String(b.payment_date || "").localeCompare(String(a.payment_date || "")),
+    );
 }
 
 function DebugPanel({ debugStatus, loadError }) {
@@ -1034,9 +1042,12 @@ function StudentsScreen({
 function StudentDetailsModal({
   student,
   transactionHistory,
+  cleanupCandidatesCount,
   formatter,
   onClose,
   onSave,
+  onCleanupHistory,
+  isCleaningHistory,
   isSaving,
 }) {
   const [isEditing, setIsEditing] = useState(false);
@@ -1056,6 +1067,15 @@ function StudentDetailsModal({
   async function saveChanges() {
     const ok = await onSave(draft);
     if (ok) setIsEditing(false);
+  }
+
+  async function cleanupHistory() {
+    if (!onCleanupHistory || !cleanupCandidatesCount) return;
+    const confirmed = window.confirm(
+      `Remove ${cleanupCandidatesCount} pending placeholder row(s) from this student's fee history?`,
+    );
+    if (!confirmed) return;
+    await onCleanupHistory(student.student_id);
   }
 
   return (
@@ -1224,7 +1244,19 @@ function StudentDetailsModal({
         )}
 
         <div className="student-history">
-          <h4>Fee history</h4>
+          <div className="student-modal-head">
+            <h4>Fee history</h4>
+            {cleanupCandidatesCount > 0 ? (
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={cleanupHistory}
+                disabled={isCleaningHistory}
+              >
+                {isCleaningHistory ? "Cleaning..." : `Clean Pending Rows (${cleanupCandidatesCount})`}
+              </button>
+            ) : null}
+          </div>
           <div className="history-list history-list-minimal">
             <div className="history-head">
               <span>Date & Time</span>
@@ -1249,24 +1281,18 @@ function StudentDetailsModal({
   );
 }
 
+/* Legacy block kept temporarily for reference; disabled to avoid duplicate/broken JSX.
 function PaymentScreen({
   formatter,
   students,
   availableMonths,
   appSettings,
-  onAddPaymentRow,
   onAddBulkPaymentRows,
   isSavingPayment,
   initialStudentId,
   selectedMonthKey,
 }) {
-  const paymentMonthInputRef = useRef(null);
   const bulkMonthInputRef = useRef(null);
-  const [formState, setFormState] = useState({
-    ...paymentFormDefaults,
-    student_id: "",
-  });
-  const [paymentFormError, setPaymentFormError] = useState("");
   const [bulkFormError, setBulkFormError] = useState("");
   const [bulkFormState, setBulkFormState] = useState({
     month_key: selectedMonthKey || "",
@@ -1280,20 +1306,16 @@ function PaymentScreen({
   const defaultMonth = selectedMonthKey || availableMonths[availableMonths.length - 1]?.key || "";
 
   useEffect(() => {
-    setFormState((current) => ({
-      ...current,
-      student_id: initialStudentId || current.student_id || "",
-      month_key: selectedMonthKey || current.month_key,
-    }));
     setBulkFormState((current) => ({
       ...current,
-      month_key: selectedMonthKey || current.month_key,
+      month_key: selectedMonthKey || current.month_key || defaultMonth,
+      lines: current.lines.map((line, index) =>
+        index === 0
+          ? { ...line, student_id: initialStudentId || line.student_id || "" }
+          : line,
+      ),
     }));
-  }, [initialStudentId, selectedMonthKey]);
-
-  function updateField(field, value) {
-    setFormState((current) => ({ ...current, [field]: value }));
-  }
+  }, [defaultMonth, initialStudentId, selectedMonthKey]);
 
   function updateBulkField(field, value) {
     setBulkFormState((current) => ({ ...current, [field]: value }));
@@ -1325,41 +1347,35 @@ function PaymentScreen({
     }));
   }
 
-  async function submitPayment(event) {
-    event.preventDefault();
-    if (!String(formState.student_id || "").trim()) {
-      setPaymentFormError("Please select a student name.");
-      return;
-    }
-    if (String(formState.amount_received || "").trim() === "") {
-      setPaymentFormError("Amount received is required.");
-      return;
-    }
-
-    setPaymentFormError("");
-    const saved = await onAddPaymentRow(formState);
-    if (!saved) return;
-    setFormState({
-      student_id: "",
-      month_key: defaultMonth,
-      payment_mode: "Online",
-      transfer_date: new Date().toISOString().slice(0, 10),
-      fee_override: "",
-      amount_received: "",
-    });
-  }
-
   async function submitBulkPayment(event) {
     event.preventDefault();
-    const validLines = bulkFormState.lines
-      .map((line) => ({
-        student_id: String(line.student_id || "").trim(),
-        amount_received: String(line.amount_received || "").trim(),
-      }))
-      .filter((line) => line.student_id && line.amount_received !== "");
-
+    const normalizedLines = bulkFormState.lines.map((line) => ({
+      student_id: String(line.student_id || "").trim(),
+      amount_received: String(line.amount_received || "").trim(),
+    }));
+    const hasIncompleteRow = normalizedLines.some(
+      (line) => (line.student_id && !line.amount_received) || (!line.student_id && line.amount_received),
+    );
+    if (hasIncompleteRow) {
+      setBulkFormError("Each row needs both Student name and Amount received.");
+      return;
+    }
+    const validLines = normalizedLines.filter((line) => line.student_id && line.amount_received);
     if (!validLines.length) {
-      setBulkFormError("Add at least one student and amount for bulk save.");
+      setBulkFormError("Add at least one student and amount for save.");
+      return;
+    }
+    if (!bulkFormState.month_key) {
+      setBulkFormError("Payment month is required.");
+      return;
+    }
+    if (!bulkFormState.transfer_date) {
+      setBulkFormError("Transfer date is required.");
+      return;
+    }
+    const invalidAmountRow = validLines.find((line) => Number(line.amount_received) <= 0);
+    if (invalidAmountRow) {
+      setBulkFormError("Amount received must be greater than 0.");
       return;
     }
 
@@ -1381,8 +1397,9 @@ function PaymentScreen({
     if (!saved) return;
     setBulkFormState((current) => ({
       ...current,
-      lines: [{ student_id: "", amount_received: "" }],
+      lines: [{ student_id: initialStudentId || "", amount_received: "" }],
       fee_override: "",
+      month_key: selectedMonthKey || current.month_key || defaultMonth,
     }));
   }
 
@@ -1391,30 +1408,13 @@ function PaymentScreen({
       <div className="section-heading">
         <div>
           <p className="eyebrow">Payment entry</p>
-          <h2>Add a payment row</h2>
+          <h2>Add payments</h2>
         </div>
         <p className="section-copy">
-          Month-wise tracking keeps pending reminders accurate. One row per student per month
-          maps directly to the Google Sheets design.
+          Month-wise tracking keeps pending reminders accurate. Add one or multiple students in one
+          payment window.
         </p>
       </div>
-
-      <form className="payment-form" onSubmit={submitPayment}>
-        <label className="field">
-          <span>Student name</span>
-          <select
-            value={formState.student_id}
-            required
-            onChange={(event) => updateField("student_id", event.target.value)}
-          >
-            <option value="">----</option>
-            {students.map((student) => (
-              <option key={student.student_id} value={student.student_id}>
-                {student.student_name}
-              </option>
-            ))}
-          </select>
-        </label>
 
         <label className="field">
           <span>Payment covers month</span>
@@ -1669,6 +1669,279 @@ function PaymentScreen({
   );
 }
 
+*/
+function PaymentEntryScreen({
+  formatter,
+  students,
+  availableMonths,
+  appSettings,
+  onAddBulkPaymentRows,
+  isSavingPayment,
+  initialStudentId,
+  selectedMonthKey,
+}) {
+  const bulkMonthInputRef = useRef(null);
+  const [bulkFormError, setBulkFormError] = useState("");
+  const minMonth = availableMonths[0]?.key || "";
+  const maxMonth = availableMonths[availableMonths.length - 1]?.key || "";
+  const defaultMonth = selectedMonthKey || availableMonths[availableMonths.length - 1]?.key || "";
+  const [bulkFormState, setBulkFormState] = useState({
+    month_key: defaultMonth,
+    payment_mode: "Online",
+    transfer_date: new Date().toISOString().slice(0, 10),
+    fee_override: "",
+    lines: [{ student_id: initialStudentId || "", amount_received: "" }],
+  });
+
+  useEffect(() => {
+    setBulkFormState((current) => ({
+      ...current,
+      month_key: selectedMonthKey || current.month_key || defaultMonth,
+      lines: current.lines.map((line, index) =>
+        index === 0
+          ? { ...line, student_id: initialStudentId || line.student_id || "" }
+          : line,
+      ),
+    }));
+  }, [defaultMonth, initialStudentId, selectedMonthKey]);
+
+  function updateBulkField(field, value) {
+    setBulkFormState((current) => ({ ...current, [field]: value }));
+  }
+
+  function updateBulkLine(index, field, value) {
+    setBulkFormState((current) => ({
+      ...current,
+      lines: current.lines.map((line, lineIndex) =>
+        lineIndex === index ? { ...line, [field]: value } : line,
+      ),
+    }));
+  }
+
+  function addBulkLine() {
+    setBulkFormState((current) => ({
+      ...current,
+      lines: [...current.lines, { student_id: "", amount_received: "" }],
+    }));
+  }
+
+  function removeBulkLine(index) {
+    setBulkFormState((current) => ({
+      ...current,
+      lines:
+        current.lines.length <= 1
+          ? [{ student_id: initialStudentId || "", amount_received: "" }]
+          : current.lines.filter((_, lineIndex) => lineIndex !== index),
+    }));
+  }
+
+  async function submitBulkPayment(event) {
+    event.preventDefault();
+    const normalizedLines = bulkFormState.lines.map((line) => ({
+      student_id: String(line.student_id || "").trim(),
+      amount_received: String(line.amount_received || "").trim(),
+    }));
+    const hasIncompleteRow = normalizedLines.some(
+      (line) => (line.student_id && !line.amount_received) || (!line.student_id && line.amount_received),
+    );
+    if (hasIncompleteRow) {
+      setBulkFormError("Each row needs both Student name and Amount received.");
+      return;
+    }
+    const validLines = normalizedLines.filter((line) => line.student_id && line.amount_received);
+    if (!validLines.length) {
+      setBulkFormError("Add at least one student and amount for save.");
+      return;
+    }
+    if (!bulkFormState.month_key) {
+      setBulkFormError("Payment month is required.");
+      return;
+    }
+    if (!bulkFormState.transfer_date) {
+      setBulkFormError("Transfer date is required.");
+      return;
+    }
+    const invalidAmountRow = validLines.find((line) => Number(line.amount_received) < 0);
+    if (invalidAmountRow) {
+      setBulkFormError("Amount received cannot be negative.");
+      return;
+    }
+    const uniqueStudents = new Set(validLines.map((line) => line.student_id));
+    if (uniqueStudents.size !== validLines.length) {
+      setBulkFormError("Duplicate student entries found. Keep only one row per student.");
+      return;
+    }
+
+    setBulkFormError("");
+    const saved = await onAddBulkPaymentRows({
+      month_key: bulkFormState.month_key,
+      payment_mode: bulkFormState.payment_mode,
+      transfer_date: bulkFormState.transfer_date,
+      fee_override: bulkFormState.fee_override,
+      lines: validLines,
+    });
+
+    if (!saved) return;
+    setBulkFormState((current) => ({
+      ...current,
+      lines: [{ student_id: initialStudentId || "", amount_received: "" }],
+      fee_override: "",
+      month_key: selectedMonthKey || current.month_key || defaultMonth,
+    }));
+  }
+
+  return (
+    <section className="panel stack-lg">
+      <div className="section-heading">
+        <div>
+          <p className="eyebrow">Payment entry</p>
+          <h2>Add payments</h2>
+        </div>
+        <p className="section-copy">
+          Month-wise tracking keeps pending reminders accurate. Add one or multiple students in one
+          payment window.
+        </p>
+      </div>
+
+      <form className="payment-form" onSubmit={submitBulkPayment}>
+        <label className="field">
+          <span>Payment covers month</span>
+          {MONTH_INPUT_SUPPORTED ? (
+            <div
+              className="month-input-shell"
+              onClick={() => openMonthPicker(bulkMonthInputRef.current)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  openMonthPicker(bulkMonthInputRef.current);
+                }
+              }}
+              aria-label="Pick payment month"
+            >
+              <input
+                ref={bulkMonthInputRef}
+                type="month"
+                value={bulkFormState.month_key}
+                min={minMonth}
+                max={maxMonth}
+                onChange={(event) => updateBulkField("month_key", event.target.value)}
+              />
+              <button
+                type="button"
+                className="month-icon-button"
+                onClick={() => openMonthPicker(bulkMonthInputRef.current)}
+                tabIndex={-1}
+                aria-hidden="true"
+              >
+                Cal
+              </button>
+            </div>
+          ) : (
+            <select
+              value={bulkFormState.month_key}
+              onChange={(event) => updateBulkField("month_key", event.target.value)}
+            >
+              {availableMonths.map((month) => (
+                <option key={month.key} value={month.key}>
+                  {month.label}
+                </option>
+              ))}
+            </select>
+          )}
+          <p className="tiny-copy">{formatMonthLabel(bulkFormState.month_key)}</p>
+        </label>
+
+        <label className="field">
+          <span>Payment mode</span>
+          <select
+            value={bulkFormState.payment_mode}
+            onChange={(event) => updateBulkField("payment_mode", event.target.value)}
+          >
+            <option value="Cash">Cash</option>
+            <option value="Online">Online</option>
+          </select>
+        </label>
+
+        <label className="field">
+          <span>Transfer date</span>
+          <input
+            type="date"
+            required
+            value={bulkFormState.transfer_date}
+            onChange={(event) => updateBulkField("transfer_date", event.target.value)}
+          />
+        </label>
+
+        <label className="field">
+          <span>Expected fee override (optional)</span>
+          <input
+            type="number"
+            min="0"
+            placeholder={`Default ${formatter.format(appSettings.default_monthly_fee)}`}
+            value={bulkFormState.fee_override || ""}
+            onChange={(event) => updateBulkField("fee_override", event.target.value)}
+          />
+          <p className="tiny-copy">Set 0 for a waiver month.</p>
+        </label>
+
+        <div className="field bulk-lines-field">
+          <span>Students and amount received</span>
+          <div className="bulk-lines">
+            {bulkFormState.lines.map((line, index) => (
+              <div key={`bulk-line-${index}`} className="bulk-line-row">
+                <select
+                  value={line.student_id}
+                  onChange={(event) => updateBulkLine(index, "student_id", event.target.value)}
+                >
+                  <option value="">----</option>
+                  {students.map((student) => (
+                    <option key={student.student_id} value={student.student_id}>
+                      {student.student_name}
+                    </option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  placeholder="Amount"
+                  value={line.amount_received}
+                  onChange={(event) => updateBulkLine(index, "amount_received", event.target.value)}
+                />
+                <button
+                  type="button"
+                  className="ghost-button bulk-remove-btn"
+                  onClick={() => removeBulkLine(index)}
+                  aria-label="Remove row"
+                >
+                  Remove
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="ghost-button bulk-add-btn" onClick={addBulkLine}>
+            + Add row
+          </button>
+        </div>
+
+        <div className="field">
+          <span>Status</span>
+          <p className="status-note">
+            Auto-calculated on save: full amount = Paid, partial amount = Partial, zero = Pending.
+            Use fee override for concessions or mid-month join.
+          </p>
+        </div>
+
+        <button type="submit" className="primary-button" disabled={isSavingPayment}>
+          {isSavingPayment ? "Saving..." : "Save payment"}
+        </button>
+      </form>
+      {bulkFormError ? <div className="info-card muted">{bulkFormError}</div> : null}
+    </section>
+  );
+}
+
 function ReminderQueue({ reminderGroups, formatter, appSettings }) {
   return (
     <section className="panel stack-lg">
@@ -1751,6 +2024,7 @@ export default function App() {
   const [isSavingPayment, setIsSavingPayment] = useState(false);
   const [isAddingStudent, setIsAddingStudent] = useState(false);
   const [isSavingStudentProfile, setIsSavingStudentProfile] = useState(false);
+  const [isCleaningHistory, setIsCleaningHistory] = useState(false);
   const [selectedStudentId, setSelectedStudentId] = useState("");
   const [logoLoadFailed, setLogoLoadFailed] = useState(false);
   const [successModal, setSuccessModal] = useState(null);
@@ -1919,41 +2193,13 @@ export default function App() {
     }
   }
 
-  async function addPaymentRow(formState) {
-    const built = buildPaymentFeeRow(formState, localMonthlyFees, `FEE-${Date.now()}`);
-    if (!built.ok) {
-      setLoadError(built.error);
-      return false;
-    }
-    const { feeRow, student, monthLabel } = built;
-
-    setIsSavingPayment(true);
-    try {
-      if (hasSheetsEndpoint) {
-        await addMonthlyFeeRow(feeRow);
-      }
-      setLocalMonthlyFees((current) => [...current, feeRow]);
-      setLoadError("");
-      setSuccessModal({
-        title: "Payment saved",
-        message: `${student.student_name} - ${monthLabel}`,
-      });
-      return true;
-    } catch (error) {
-      setLoadError(`Could not save payment row: ${error.message}`);
-      return false;
-    } finally {
-      setIsSavingPayment(false);
-    }
-  }
-
   function buildPaymentFeeRow(formState, sourceMonthlyFees, feeRowIdSeed) {
     const student = localStudents.find((item) => item.student_id === formState.student_id);
     if (!student) return { ok: false, error: "Student not found for payment row." };
 
     const amountPaid = Number(formState.amount_received || 0);
-    if (!Number.isFinite(amountPaid) || amountPaid < 0) {
-      return { ok: false, error: "Amount received must be a valid number." };
+    if (!Number.isFinite(amountPaid) || amountPaid <= 0) {
+      return { ok: false, error: "Amount received must be greater than 0." };
     }
 
     const monthKeyToSave = normalizeMonthKey(formState.month_key);
@@ -2250,6 +2496,17 @@ export default function App() {
       ),
     [localMonthlyFees, selectedStudentId],
   );
+  const selectedStudentCleanupCandidates = useMemo(
+    () =>
+      localMonthlyFees.filter((fee) => {
+        if (fee.student_id !== selectedStudentId) return false;
+        const status = String(fee.status || "").trim().toLowerCase();
+        const amountPaid = Number(fee.amount_paid || 0);
+        const hasPaymentDate = Boolean(parseDateValue(fee.payment_date));
+        return status === "pending" && amountPaid <= 0 && !hasPaymentDate;
+      }),
+    [localMonthlyFees, selectedStudentId],
+  );
 
   function openPaymentForStudent(studentId, monthKeyOverride = "") {
     setPaymentStudentId(studentId);
@@ -2259,6 +2516,45 @@ export default function App() {
 
   function openStudentDetails(studentId) {
     setSelectedStudentId(studentId);
+  }
+
+  async function cleanupSelectedStudentHistory(studentId) {
+    const candidates = localMonthlyFees.filter((fee) => {
+      if (fee.student_id !== studentId) return false;
+      const status = String(fee.status || "").trim().toLowerCase();
+      const amountPaid = Number(fee.amount_paid || 0);
+      const hasPaymentDate = Boolean(parseDateValue(fee.payment_date));
+      return status === "pending" && amountPaid <= 0 && !hasPaymentDate;
+    });
+    const ids = candidates.map((row) => String(row.fee_row_id || "").trim()).filter(Boolean);
+
+    if (!candidates.length) return true;
+    if (!ids.length) {
+      setLoadError("Cleanup skipped: no fee_row_id found for pending placeholder rows.");
+      return false;
+    }
+
+    setIsCleaningHistory(true);
+    try {
+      if (hasSheetsEndpoint) {
+        await deleteMonthlyFeeRows(ids);
+      }
+      const idSet = new Set(ids);
+      setLocalMonthlyFees((current) =>
+        current.filter((row) => !idSet.has(String(row.fee_row_id || "").trim())),
+      );
+      setLoadError("");
+      setSuccessModal({
+        title: "History cleaned",
+        message: `Removed ${ids.length} pending placeholder row(s).`,
+      });
+      return true;
+    } catch (error) {
+      setLoadError(`Could not clean fee history: ${error.message}`);
+      return false;
+    } finally {
+      setIsCleaningHistory(false);
+    }
   }
 
   function openStudentsWithFilters({
@@ -2407,12 +2703,11 @@ export default function App() {
           />
         )}
         {activeScreen === "payment" && (
-          <PaymentScreen
+          <PaymentEntryScreen
             formatter={formatter}
             students={localStudents}
             availableMonths={monthChoices}
             appSettings={appSettings}
-            onAddPaymentRow={addPaymentRow}
             onAddBulkPaymentRows={addBulkPaymentRows}
             isSavingPayment={isSavingPayment}
             initialStudentId={paymentStudentId}
@@ -2429,8 +2724,11 @@ export default function App() {
         <StudentDetailsModal
           student={selectedStudent}
           transactionHistory={selectedStudentTransactionHistory}
+          cleanupCandidatesCount={selectedStudentCleanupCandidates.length}
           formatter={formatter}
           onSave={saveStudentProfile}
+          onCleanupHistory={cleanupSelectedStudentHistory}
+          isCleaningHistory={isCleaningHistory}
           isSaving={isSavingStudentProfile}
           onClose={() => setSelectedStudentId("")}
         />
