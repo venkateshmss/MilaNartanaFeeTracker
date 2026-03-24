@@ -972,6 +972,85 @@ button {
   background: rgba(10, 16, 30, 0.72);
 }
 
+.dashboard-donut-card {
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: rgba(10, 16, 30, 0.72);
+}
+
+.dashboard-analytics-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.donut-filter-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.donut-legend {
+  display: grid;
+  gap: 8px;
+}
+
+.donut-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-weight: 700;
+}
+
+.dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  display: inline-block;
+}
+
+.dot-cash {
+  background: #13c48d;
+}
+
+.dot-online {
+  background: #6f7cff;
+}
+
+.donut-wrap {
+  display: grid;
+  place-items: center;
+  padding: 6px 0 2px;
+}
+
+.donut-ring {
+  width: min(74vw, 300px);
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+}
+
+.donut-hole {
+  width: 62%;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: rgba(10, 16, 30, 0.95);
+  border: 1px solid rgba(130, 164, 255, 0.25);
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--text-soft);
+}
+
+.donut-hole strong {
+  color: #ffffff;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
 .collection-row {
   display: grid;
   gap: 7px;
@@ -1087,6 +1166,10 @@ button {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .donut-filter-row {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .collection-rate-box strong {
     font-size: 2rem;
   }
@@ -1168,6 +1251,12 @@ button {
 
   .reminder-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1080px) {
+  .dashboard-analytics-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }
 
