@@ -326,6 +326,7 @@ function LoginScreen({ isSubmitting, error, lockoutUntil, onLogin }) {
 function Dashboard({
   monthKey,
   monthChoices,
+  monthlyFees,
   onMonthChange,
   totalStudents,
   totalAmount,
@@ -340,6 +341,8 @@ function Dashboard({
   onOpenStudentsFiltered,
 }) {
   const monthInputRef = useRef(null);
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
   const monthLabel = monthChoices.find((option) => option.key === monthKey)?.label ?? monthKey;
   const minMonth = monthChoices[0]?.key || "";
   const maxMonth = monthChoices[monthChoices.length - 1]?.key || "";
@@ -356,6 +359,56 @@ function Dashboard({
   const pendingPercent = expectedSafe > 0 ? Math.round((pendingSafe / expectedSafe) * 100) : 0;
   const progressPercent = (value) =>
     expectedSafe > 0 ? Math.max(0, Math.min(100, (Number(value || 0) / expectedSafe) * 100)) : 0;
+
+  useEffect(() => {
+    if (!monthChoices.length) return;
+    const fallbackTo = monthChoices.some((m) => m.key === monthKey)
+      ? monthKey
+      : monthChoices[monthChoices.length - 1].key;
+    const fallbackFrom = addMonthsToKey(fallbackTo, -2);
+    const hasFallbackFrom = monthChoices.some((m) => m.key === fallbackFrom);
+    setRangeTo((current) => current || fallbackTo);
+    setRangeFrom((current) => current || (hasFallbackFrom ? fallbackFrom : fallbackTo));
+  }, [monthChoices, monthKey]);
+
+  const effectiveRangeFrom = rangeFrom || monthKey;
+  const effectiveRangeTo = rangeTo || monthKey;
+  const normalizedFrom = effectiveRangeFrom <= effectiveRangeTo ? effectiveRangeFrom : effectiveRangeTo;
+  const normalizedTo = effectiveRangeFrom <= effectiveRangeTo ? effectiveRangeTo : effectiveRangeFrom;
+
+  const rangeTotals = useMemo(() => {
+    return monthlyFees.reduce(
+      (acc, row) => {
+        const key = normalizeMonthKey(row.month_key);
+        if (!key || key < normalizedFrom || key > normalizedTo) return acc;
+        const amount = Number(row.amount_paid || 0);
+        if (!Number.isFinite(amount) || amount <= 0) return acc;
+        const mode = String(row.payment_mode || "").trim().toLowerCase();
+        if (mode === "cash") acc.cash += amount;
+        else if (mode === "online") acc.online += amount;
+        return acc;
+      },
+      { cash: 0, online: 0 },
+    );
+  }, [monthlyFees, normalizedFrom, normalizedTo]);
+
+  const rangeTotal = rangeTotals.cash + rangeTotals.online;
+  const rangeCashPercent = rangeTotal > 0 ? Math.round((rangeTotals.cash / rangeTotal) * 100) : 0;
+  const rangeOnlinePercent = rangeTotal > 0 ? Math.round((rangeTotals.online / rangeTotal) * 100) : 0;
+  const donutBg =
+    rangeTotal > 0
+      ? `conic-gradient(#13c48d 0% ${rangeCashPercent}%, #6f7cff ${rangeCashPercent}% 100%)`
+      : "conic-gradient(rgba(126,149,204,0.24) 0% 100%)";
+
+  function formatMonthKeyShort(key) {
+    const [y, m] = String(key || "").split("-");
+    if (!y || !m) return key;
+    const d = new Date(Number(y), Number(m) - 1, 1);
+    const month = d.toLocaleString("en-US", { month: "short" });
+    const year = String(d.getFullYear()).slice(-2);
+    return `${month}-${year}`;
+  }
+
   function openStudentsWithStatuses(statuses) {
     onOpenStudentsFiltered({
       monthKey,
@@ -467,16 +520,77 @@ function Dashboard({
         </article>
       </div>
 
-      <div className="info-card">
-        <div className="section-heading">
-          <div>
-            <p className="eyebrow">Collection progress</p>
-            <h2>{monthLabel} progress details</h2>
+      <div className="dashboard-analytics-grid">
+        <div className="info-card dashboard-donut-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Payment mode share</p>
+              <h2>Cash vs Online in range</h2>
+            </div>
+            <p className="section-copy">
+              Range total: {formatter.format(rangeTotal)} from {formatMonthKeyShort(normalizedFrom)} to{" "}
+              {formatMonthKeyShort(normalizedTo)}
+            </p>
           </div>
-          <p className="section-copy">Amounts are shown against expected total for the month.</p>
+
+          <div className="donut-filter-row">
+            <label className="field">
+              <span>From</span>
+              <select value={rangeFrom} onChange={(event) => setRangeFrom(event.target.value)}>
+                {monthChoices.map((option) => (
+                  <option key={`from-${option.key}`} value={option.key}>
+                    {formatMonthKeyShort(option.key)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="field">
+              <span>To</span>
+              <select value={rangeTo} onChange={(event) => setRangeTo(event.target.value)}>
+                {monthChoices.map((option) => (
+                  <option key={`to-${option.key}`} value={option.key}>
+                    {formatMonthKeyShort(option.key)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+
+          <div className="donut-legend">
+            <div className="donut-legend-item">
+              <span className="dot dot-cash" />
+              <span>
+                Cash {formatter.format(rangeTotals.cash)} ({rangeCashPercent}%)
+              </span>
+            </div>
+            <div className="donut-legend-item">
+              <span className="dot dot-online" />
+              <span>
+                Online {formatter.format(rangeTotals.online)} ({rangeOnlinePercent}%)
+              </span>
+            </div>
+          </div>
+
+          <div className="donut-wrap">
+            <div className="donut-ring" style={{ background: donutBg }}>
+              <div className="donut-hole">
+                <strong>{formatter.format(rangeTotal)}</strong>
+                <span>Total</span>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="dashboard-progress-card">
+        <div className="info-card">
+          <div className="section-heading">
+            <div>
+              <p className="eyebrow">Collection progress</p>
+              <h2>{monthLabel} progress details</h2>
+            </div>
+            <p className="section-copy">Amounts are shown against expected total for the month.</p>
+          </div>
+
+          <div className="dashboard-progress-card">
           <button
             type="button"
             className="collection-row collection-row-button"
@@ -543,6 +657,7 @@ function Dashboard({
             <span>Collection rate</span>
             <strong>{collectionRate}%</strong>
           </button>
+          </div>
         </div>
       </div>
     </section>
@@ -2670,6 +2785,7 @@ export default function App() {
           <Dashboard
             monthKey={monthKey}
             monthChoices={monthChoices}
+            monthlyFees={localMonthlyFees}
             onMonthChange={setMonthKey}
             totalStudents={totalStudents}
             expectedAmount={expectedAmount}
