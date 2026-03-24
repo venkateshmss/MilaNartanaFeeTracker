@@ -6,6 +6,7 @@ const WRITE_ACTIONS = [
   "addMonthlyFeeRow",
   "addStudentRow",
   "updateStudentRow",
+  "deleteMonthlyFeeRows",
 ];
 
 function json(res, status, body) {

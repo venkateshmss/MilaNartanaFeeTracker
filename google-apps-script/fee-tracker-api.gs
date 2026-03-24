@@ -8,6 +8,7 @@ const WRITE_ACTIONS = [
   "addMonthlyFeeRow",
   "addStudentRow",
   "updateStudentRow",
+  "deleteMonthlyFeeRows",
 ];
 const REQUIRED_STUDENT_COLUMNS = [
   "student_id",
@@ -78,6 +79,7 @@ function doPost(e) {
     if (action === "addMonthlyFeeRow") data = addMonthlyFeeRow_(payload.feeRow);
     if (action === "addStudentRow") data = addStudentRow_(payload.studentRow);
     if (action === "updateStudentRow") data = updateStudentRow_(payload.studentRow);
+    if (action === "deleteMonthlyFeeRows") data = deleteMonthlyFeeRows_(payload.feeRowIds);
 
     if (!data) {
       return json_({ ok: false, error: "Unknown action" });
@@ -153,6 +155,32 @@ function updateStudentRow_(studentRow) {
   }
 
   throw new Error("student_id not found");
+}
+
+function deleteMonthlyFeeRows_(feeRowIds) {
+  assertSheetSchema_();
+  const ids = Array.isArray(feeRowIds)
+    ? feeRowIds.map((id) => String(id || "").trim()).filter(Boolean)
+    : [];
+  if (!ids.length) throw new Error("feeRowIds is required");
+
+  const sheet = SpreadsheetApp.getActive().getSheetByName(MONTHLY_FEES_SHEET);
+  const rows = sheet.getDataRange().getValues();
+  const headers = rows[0] || [];
+  const feeIdCol = findColumnIndex_(headers, "fee_row_id");
+  const idSet = ids.reduce((acc, id) => {
+    acc[id] = true;
+    return acc;
+  }, {});
+
+  const rowsToDelete = [];
+  for (let r = 1; r < rows.length; r += 1) {
+    const feeId = String(rows[r][feeIdCol] || "").trim();
+    if (idSet[feeId]) rowsToDelete.push(r + 1);
+  }
+
+  rowsToDelete.sort((a, b) => b - a).forEach((sheetRow) => sheet.deleteRow(sheetRow));
+  return { deleted: rowsToDelete.length };
 }
 
 function readRows_(sheetName) {
@@ -293,6 +321,13 @@ function validatePayload_(action, payload) {
     const row = payload && payload.feeRow;
     if (!row || !row.student_id || !row.month_key) {
       throw new Error("feeRow with student_id and month_key is required");
+    }
+  }
+
+  if (action === "deleteMonthlyFeeRows") {
+    const ids = payload && payload.feeRowIds;
+    if (!Array.isArray(ids) || !ids.length) {
+      throw new Error("feeRowIds is required");
     }
   }
 }

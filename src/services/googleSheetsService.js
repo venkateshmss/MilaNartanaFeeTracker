@@ -198,6 +198,10 @@ export async function updateStudentRow(studentRow) {
   return callSheetsEndpoint("updateStudentRow", { studentRow });
 }
 
+export async function deleteMonthlyFeeRows(feeRowIds) {
+  return callSheetsEndpoint("deleteMonthlyFeeRows", { feeRowIds });
+}
+
 export function hasSheetsEndpointConfigured() {
   if (import.meta.env.DEV) return Boolean(SHEETS_WEB_APP_URL);
   return true;
