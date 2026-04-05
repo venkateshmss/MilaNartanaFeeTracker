@@ -334,8 +334,6 @@ function Dashboard({
   pendingGapAmount,
   fullPaidAmount,
   partialCollectedAmount,
-  cashCollectedAmount,
-  onlineCollectedAmount,
   collectionRate,
   formatter,
   onOpenStudentsFiltered,
@@ -351,10 +349,10 @@ function Dashboard({
   const partialSafe = Math.max(Number(partialCollectedAmount || 0), 0);
   const collectedSafe = Math.max(Number(totalAmount || 0), 0);
   const pendingSafe = Math.max(Number(pendingGapAmount || 0), 0);
-  const cashSafe = Math.max(Number(cashCollectedAmount || 0), 0);
-  const onlineSafe = Math.max(Number(onlineCollectedAmount || 0), 0);
-  const cashPercent = collectedSafe > 0 ? Math.round((cashSafe / collectedSafe) * 100) : 0;
-  const onlinePercent = collectedSafe > 0 ? Math.round((onlineSafe / collectedSafe) * 100) : 0;
+  const cashSafe = 0;
+  const onlineSafe = 0;
+  const cashPercent = 0;
+  const onlinePercent = 0;
   const collectedPercent = expectedSafe > 0 ? Math.round((collectedSafe / expectedSafe) * 100) : 100;
   const pendingPercent = expectedSafe > 0 ? Math.round((pendingSafe / expectedSafe) * 100) : 0;
   const progressPercent = (value) =>
@@ -391,6 +389,24 @@ function Dashboard({
       { cash: 0, online: 0 },
     );
   }, [monthlyFees, normalizedFrom, normalizedTo]);
+  const monthModeTotals = useMemo(() => {
+    return monthlyFees.reduce(
+      (acc, row) => {
+        const key = normalizeMonthKey(row.month_key);
+        if (key !== monthKey) return acc;
+        const amount = Number(row.amount_paid || 0);
+        if (!Number.isFinite(amount) || amount <= 0) return acc;
+        const mode = String(row.payment_mode || "").trim().toLowerCase();
+        if (mode === "cash") acc.cash += amount;
+        else if (mode === "online") acc.online += amount;
+        return acc;
+      },
+      { cash: 0, online: 0 },
+    );
+  }, [monthlyFees, monthKey]);
+  const monthCashPercent = collectedSafe > 0 ? Math.round((monthModeTotals.cash / collectedSafe) * 100) : 0;
+  const monthOnlinePercent =
+    collectedSafe > 0 ? Math.round((monthModeTotals.online / collectedSafe) * 100) : 0;
 
   const rangeTotal = rangeTotals.cash + rangeTotals.online;
   const rangeCashPercent = rangeTotal > 0 ? Math.round((rangeTotals.cash / rangeTotal) * 100) : 0;
@@ -482,7 +498,28 @@ function Dashboard({
         <article className="dashboard-metric-card metric-collected">
           <p className="dashboard-metric-title">Amount collected</p>
           <strong className="dashboard-metric-value text-success">{formatter.format(collectedSafe)}</strong>
-          <p className="dashboard-metric-sub">{collectedPercent}% of total</p>
+          <p className="dashboard-metric-sub">
+            {collectedPercent}% of {formatter.format(expectedSafe)} total · {monthLabel}
+          </p>
+          <div className="collected-split">
+            <div className="collected-split-col">
+              <p className="collected-split-label">
+                <span className="dot dot-cash" /> Cash
+              </p>
+              <strong className="collected-split-value cash">{formatter.format(monthModeTotals.cash)}</strong>
+              <p className="collected-split-sub">{monthCashPercent}% of collected</p>
+            </div>
+            <div className="collected-split-divider" />
+            <div className="collected-split-col">
+              <p className="collected-split-label">
+                <span className="dot dot-online" /> Online
+              </p>
+              <strong className="collected-split-value online">
+                {formatter.format(monthModeTotals.online)}
+              </strong>
+              <p className="collected-split-sub">{monthOnlinePercent}% of collected</p>
+            </div>
+          </div>
         </article>
 
         <article className="dashboard-metric-card metric-pending">
@@ -492,7 +529,7 @@ function Dashboard({
         </article>
       </div>
 
-      <div className="dashboard-channel-grid">
+      {false && <div className="dashboard-channel-grid">
         <article className="dashboard-channel-card">
           <div className="dashboard-channel-icon cash" aria-hidden="true">
             💵
@@ -518,7 +555,7 @@ function Dashboard({
             </p>
           </div>
         </article>
-      </div>
+      </div>}
 
       <div className="dashboard-analytics-grid">
         <div className="info-card dashboard-donut-card">
@@ -700,6 +737,13 @@ function StudentsScreen({
   });
   const locations = getLocations(studentsWithStatus);
 
+  function getPaymentModeLabel(feeLike) {
+    const amountPaid = Number(feeLike?.amount_paid || 0);
+    if (amountPaid <= 0) return "Pending";
+    const mode = String(feeLike?.payment_mode || "").trim();
+    return mode || "Pending";
+  }
+
   const visibleStudents = studentsWithStatus.filter((student) => {
     const matchesQuery = student.student_name.toLowerCase().includes(query.toLowerCase());
     const matchesLocation = location === "All" || student.location === location;
@@ -737,6 +781,7 @@ function StudentsScreen({
             monthStatus: status,
             dueAmount,
             monthDueAmount: dueAmount,
+            paymentMode: getPaymentModeLabel(matchedMonth),
             totalPendingDue,
             lastPayment,
           },
@@ -751,6 +796,7 @@ function StudentsScreen({
           monthStatus: fee.status || "Pending",
           dueAmount: Number(fee.balance_due || 0),
           monthDueAmount: Number(fee.balance_due || 0),
+          paymentMode: getPaymentModeLabel(fee),
           totalPendingDue,
           lastPayment,
         }));
@@ -764,6 +810,7 @@ function StudentsScreen({
           monthStatus: fee.status,
           dueAmount: Number(fee.balance_due || 0),
           monthDueAmount: Number(fee.balance_due || 0),
+          paymentMode: getPaymentModeLabel(fee),
           totalPendingDue,
           lastPayment,
         }));
@@ -777,6 +824,7 @@ function StudentsScreen({
           monthStatus: student.selectedMonthStatus || "Paid",
           dueAmount: Number(student.selectedMonthFee?.balance_due || 0),
           monthDueAmount: Number(student.selectedMonthFee?.balance_due || 0),
+          paymentMode: getPaymentModeLabel(student.selectedMonthFee),
           totalPendingDue,
           lastPayment,
         },
@@ -1070,6 +1118,7 @@ function StudentsScreen({
         <div className="student-list-head" role="row">
           <span>Name</span>
           <span>Due amount</span>
+          <span>Payment mode</span>
           <span>Actions</span>
         </div>
 
@@ -1098,6 +1147,9 @@ function StudentsScreen({
                   {row.monthLabel} - {formatter.format(row.monthDueAmount)}
                 </p>
               ) : null}
+            </div>
+            <div data-label="Payment mode" className="cell-mode">
+              <span className="tiny-copy">{row.paymentMode || "Pending"}</span>
             </div>
             <div data-label="Actions" className="cell-actions dashboard-actions">
               <button
@@ -2409,8 +2461,11 @@ export default function App() {
       setLocalMonthlyFees((current) => [...current, ...rowsToAdd]);
       setLoadError("");
       setSuccessModal({
-        title: "Bulk payments saved",
-        message: `${rowsToAdd.length} payment row(s) saved for ${Array.from(monthsTouched).join(", ")}.`,
+        title: rowsToAdd.length === 1 ? "Payment saved" : "Bulk payments saved",
+        message:
+          rowsToAdd.length === 1
+            ? `${rowsToAdd[0].student_name} - ${rowsToAdd[0].month_label}`
+            : `${rowsToAdd.length} payment row(s) saved for ${Array.from(monthsTouched).join(", ")}.`,
       });
       return true;
     } catch (error) {
@@ -2507,24 +2562,6 @@ export default function App() {
       ),
     [monthEligibleStudents],
   );
-  const cashCollectedAmount = useMemo(() => {
-    const eligibleIds = new Set(monthEligibleStudents.map((student) => student.student_id));
-    return localMonthlyFees.reduce((sum, row) => {
-      if (normalizeMonthKey(row.month_key) !== monthKey) return sum;
-      if (!eligibleIds.has(row.student_id)) return sum;
-      if (String(row.payment_mode || "").trim().toLowerCase() !== "cash") return sum;
-      return sum + Number(row.amount_paid || 0);
-    }, 0);
-  }, [localMonthlyFees, monthEligibleStudents, monthKey]);
-  const onlineCollectedAmount = useMemo(() => {
-    const eligibleIds = new Set(monthEligibleStudents.map((student) => student.student_id));
-    return localMonthlyFees.reduce((sum, row) => {
-      if (normalizeMonthKey(row.month_key) !== monthKey) return sum;
-      if (!eligibleIds.has(row.student_id)) return sum;
-      if (String(row.payment_mode || "").trim().toLowerCase() !== "online") return sum;
-      return sum + Number(row.amount_paid || 0);
-    }, 0);
-  }, [localMonthlyFees, monthEligibleStudents, monthKey]);
   const fullPaidAmount = useMemo(
     () =>
       monthEligibleStudents.reduce((sum, student) => {
@@ -2793,8 +2830,6 @@ export default function App() {
             pendingGapAmount={pendingGapAmount}
             fullPaidAmount={fullPaidAmount}
             partialCollectedAmount={partialCollectedAmount}
-            cashCollectedAmount={cashCollectedAmount}
-            onlineCollectedAmount={onlineCollectedAmount}
             collectionRate={collectionRate}
             formatter={formatter}
             onOpenStudentsFiltered={openStudentsWithFilters}
