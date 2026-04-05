@@ -112,6 +112,7 @@ export function aggregateMonthlyFees(monthlyFees) {
       month_key: normalizeMonthKey(latestRow?.month_key),
       month_label:
         latestRow?.month_label || formatMonthLabel(normalizeMonthKey(latestRow?.month_key)),
+      payment_mode: latestRow?.payment_mode || "",
       fee_amount: feeAmount,
       amount_paid: totalPaid,
       balance_due: Math.max(feeAmount - totalPaid, 0),
@@ -156,6 +157,7 @@ function buildStudentLedger(student, aggregatedFees, upToMonthKey) {
       student_name: student.student_name,
       month_key: monthKey,
       month_label: formatMonthLabel(monthKey),
+      payment_mode: "",
       fee_amount: feeAmount,
       amount_paid: 0,
       balance_due: feeAmount,
