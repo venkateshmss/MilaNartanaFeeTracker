@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "generate:passcode-hash": "node scripts/generate-passcode-hash.mjs"
+    "generate:passcode-hash": "node scripts/generate-passcode-hash.mjs",
+    "rebuild:samples": "powershell -ExecutionPolicy Bypass -File scripts/rebuild-sample-data.ps1",
+    "sync:samples:weekly": "node scripts/sync-samples-from-sheets.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",
