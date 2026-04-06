@@ -230,8 +230,6 @@ foreach ($student in $students) {
   $matchCount += 1
 }
 
-$students | Export-Csv -Path $StudentsOutPath -NoTypeInformation -Encoding UTF8
-
 $settings = @{}
 foreach ($row in $settingsRows) {
   $settings[[string]$row.setting_key] = $row.setting_value
@@ -244,82 +242,28 @@ if (-not $settings.ContainsKey("whatsapp_message_template")) {
   $settings["whatsapp_message_template"] = "Hi, this is a gentle reminder from Mila Nartana. Fee pending for {{student_name}}: {{due_breakdown}}. Total due: {{total_due}}. Thank you."
 }
 
-$studentsForJs = $students | ForEach-Object {
-  [pscustomobject][ordered]@{
-    student_id = $_.student_id
-    student_name = $_.student_name
-    parent_name = $_.parent_name
-    email = $_.email
-    whatsapp_number = $_.whatsapp_number
-    alternate_phone = $_.alternate_phone
-    address = $_.address
-    location = $_.location
-    monthly_fee = [int]($_.monthly_fee)
-    join_month = $_.join_month
-    status = $_.status
-    notes = $_.notes
+$payload = [pscustomobject]@{
+  students = $students
+  monthlyFees = $monthlyFees
+  settings = $settings
+}
+$payloadPath = Join-Path $env:TEMP ("mnft-samples-" + [guid]::NewGuid().ToString() + ".json")
+$payload | ConvertTo-Json -Depth 20 | Set-Content -Path $payloadPath -Encoding UTF8
+
+try {
+  & node "scripts/write-samples-from-json.mjs" `
+    --input $payloadPath `
+    --students-out $StudentsOutPath `
+    --monthly-fees-out $MonthlyFeesPath `
+    --settings-out $SettingsPath `
+    --mock-data-out $MockDataOutPath
+} finally {
+  if (Test-Path $payloadPath) {
+    Remove-Item $payloadPath -Force
   }
 }
-
-$monthlyForJs = $monthlyFees | ForEach-Object {
-  $feeAmount = 0
-  $paid = 0
-  $due = 0
-  [void][double]::TryParse([string]$_.fee_amount, [ref]$feeAmount)
-  [void][double]::TryParse([string]$_.amount_paid, [ref]$paid)
-  [void][double]::TryParse([string]$_.balance_due, [ref]$due)
-  $mk = To-MonthKey ([string]$_.month_key)
-  [pscustomobject][ordered]@{
-    fee_row_id = $_.fee_row_id
-    student_id = $_.student_id
-    student_name = $_.student_name
-    month_key = $mk
-    month_label = if ($_.month_label) { $_.month_label } else { To-MonthLabel $mk }
-    fee_amount = [int]$feeAmount
-    amount_paid = [int]$paid
-    balance_due = [int]$due
-    status = $_.status
-    payment_date = $_.payment_date
-    payment_mode = $_.payment_mode
-    payment_ref = $_.payment_ref
-    reminder_sent = ([string]$_.reminder_sent).ToLowerInvariant() -eq "true"
-    reminder_sent_date = $_.reminder_sent_date
-    notes = $_.notes
-  }
-}
-
-$monthOptions = $monthlyForJs |
-  Select-Object -ExpandProperty month_key |
-  Where-Object { $_ } |
-  Sort-Object -Unique |
-  ForEach-Object {
-    [pscustomobject][ordered]@{
-      key = $_
-      label = To-MonthLabel $_
-    }
-  }
-
-$mockJs = @()
-$mockJs += "export const settings = " + ($settings | ConvertTo-Json -Depth 6) + ";"
-$mockJs += "// These objects mirror the future Google Sheets Students sheet columns."
-$mockJs += "export const students = " + ($studentsForJs | ConvertTo-Json -Depth 6) + ";"
-$mockJs += "// These rows mirror the future Google Sheets MonthlyFees sheet design."
-$mockJs += "export const monthlyFees = " + ($monthlyForJs | ConvertTo-Json -Depth 8) + ";"
-$mockJs += "export const monthOptions = " + ($monthOptions | ConvertTo-Json -Depth 6) + ";"
-$mockJs += @"
-export const paymentFormDefaults = {
-  student_id: students[0]?.student_id || "",
-  month_key: monthOptions[monthOptions.length - 1]?.key || "",
-  payment_mode: "Online",
-  transfer_date: new Date().toISOString().slice(0, 10),
-  fee_override: "",
-  amount_received: "",
-};
-"@
-
-Set-Content -Path $MockDataOutPath -Value ($mockJs -join "`r`n") -Encoding UTF8
 
 Write-Host "Students written: $($students.Count)"
 Write-Host "Parent matches: $matchCount / $($students.Count)"
-Write-Host "Monthly fee rows: $($monthlyForJs.Count)"
+Write-Host "Monthly fee rows: $($monthlyFees.Count)"
 Write-Host "Mock data regenerated: $MockDataOutPath"

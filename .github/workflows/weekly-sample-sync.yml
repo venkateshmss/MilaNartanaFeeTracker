@@ -1,0 +1,87 @@
+name: Weekly Sample Data Sync
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Run both DST/PST candidates; guard step keeps only 2:00 AM America/Los_Angeles.
+    - cron: "0 9 * * 0"
+    - cron: "0 10 * * 0"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync-samples:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure this run is 2:00 AM PT
+        id: timeguard
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run_sync=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          hour="$(TZ=America/Los_Angeles date +%H)"
+          if [ "$hour" = "02" ]; then
+            echo "run_sync=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run_sync=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping non-2AM PT schedule window."
+          fi
+
+      - name: Checkout
+        if: steps.timeguard.outputs.run_sync == 'true'
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        if: steps.timeguard.outputs.run_sync == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        if: steps.timeguard.outputs.run_sync == 'true'
+        run: npm ci
+
+      - name: Sync sample files from Google Sheets
+        if: steps.timeguard.outputs.run_sync == 'true'
+        env:
+          SHEETS_WEB_APP_URL: ${{ secrets.SHEETS_WEB_APP_URL }}
+          SHEETS_WRITE_TOKEN: ${{ secrets.SHEETS_WRITE_TOKEN }}
+          SYNC_SUMMARY_PATH: ${{ runner.temp }}/weekly-sync-summary.md
+        run: npm run sync:samples:weekly
+
+      - name: Build PR body
+        if: steps.timeguard.outputs.run_sync == 'true'
+        shell: bash
+        run: |
+          {
+            echo "Automated weekly sync of local sample files from live Google Sheets data."
+            echo
+            echo "Updated files:"
+            echo "- data/samples/Students.sample.csv"
+            echo "- data/samples/MonthlyFees.sample.csv"
+            echo "- data/samples/Settings.sample.csv"
+            echo "- src/data/mockData.js"
+            echo
+            if [ -f "${RUNNER_TEMP}/weekly-sync-summary.md" ]; then
+              cat "${RUNNER_TEMP}/weekly-sync-summary.md"
+            fi
+          } > "${RUNNER_TEMP}/weekly-sync-pr-body.md"
+
+      - name: Create or update pull request
+        if: steps.timeguard.outputs.run_sync == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          branch: chore/weekly-sample-sync
+          base: main
+          title: "chore(samples): weekly sample data sync"
+          commit-message: "chore(samples): weekly sample data sync"
+          body-path: ${{ runner.temp }}/weekly-sync-pr-body.md
+          labels: |
+            automation
+            data-sync

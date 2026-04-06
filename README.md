@@ -65,6 +65,27 @@ This app supports a lightweight passcode gate without OAuth.
    - `/api/sheets` is blocked unless session cookie is valid.
    - 5 failed attempts trigger a temporary lockout.
 
+## Weekly sample sync automation
+
+This repo includes a scheduled GitHub Actions workflow that refreshes sample data weekly and opens/updates a PR branch.
+
+1. Set GitHub repository secrets:
+   - `SHEETS_WEB_APP_URL`
+   - `SHEETS_WRITE_TOKEN`
+2. Workflow file: `.github/workflows/weekly-sample-sync.yml`
+   - Schedule target: Sunday 2:00 AM PT
+   - Manual trigger supported via `workflow_dispatch`
+3. Local/manual commands:
+   - Sync from live sheets and regenerate samples:
+     - `npm run sync:samples:weekly`
+   - Rebuild local samples + mock data from local CSV pipeline:
+     - `npm run rebuild:samples`
+4. PR flow:
+   - Automation commits to `chore/weekly-sample-sync`
+   - PR target is `main`
+   - PR body includes an auto-generated sync summary (counts + month range + status mix)
+   - No direct push to `main`
+
 ## Troubleshooting `Failed to fetch`
 
 1. Confirm `.env` is in project root (not inside `sample-data`).
