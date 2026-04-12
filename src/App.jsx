@@ -32,6 +32,7 @@ const screenLabels = {
   reminders: "Reminders",
 };
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Partial", "Pending"];
+const PAYMENT_MODE_OPTIONS = ["Cash", "Online", "Pending"];
 const SHEETS_CACHE_KEY = "mnft.sheets_cache_v1";
 
 function readSheetsCache() {
@@ -425,11 +426,24 @@ function Dashboard({
     return `${month}-${year}`;
   }
 
-  function openStudentsWithStatuses(statuses) {
+  function openStudentsWithFilters({
+    paymentStatuses = [],
+    paymentModes = [],
+    monthKeyOverride = monthKey,
+    monthRangeFrom = "",
+    monthRangeTo = "",
+  }) {
     onOpenStudentsFiltered({
-      monthKey,
-      paymentStatuses: statuses,
+      monthKey: monthKeyOverride,
+      paymentStatuses,
+      paymentModes,
+      monthRangeFrom,
+      monthRangeTo,
     });
+  }
+
+  function openStudentsWithStatuses(statuses) {
+    openStudentsWithFilters({ paymentStatuses: statuses });
   }
 
   return (
@@ -502,15 +516,23 @@ function Dashboard({
             {collectedPercent}% of {formatter.format(expectedSafe)} total · {monthLabel}
           </p>
           <div className="collected-split">
-            <div className="collected-split-col">
+            <button
+              type="button"
+              className="collected-split-col collected-split-button"
+              onClick={() => openStudentsWithFilters({ paymentModes: ["Cash"] })}
+            >
               <p className="collected-split-label">
                 <span className="dot dot-cash" /> Cash
               </p>
               <strong className="collected-split-value cash">{formatter.format(monthModeTotals.cash)}</strong>
               <p className="collected-split-sub">{monthCashPercent}% of collected</p>
-            </div>
+            </button>
             <div className="collected-split-divider" />
-            <div className="collected-split-col">
+            <button
+              type="button"
+              className="collected-split-col collected-split-button"
+              onClick={() => openStudentsWithFilters({ paymentModes: ["Online"] })}
+            >
               <p className="collected-split-label">
                 <span className="dot dot-online" /> Online
               </p>
@@ -518,7 +540,7 @@ function Dashboard({
                 {formatter.format(monthModeTotals.online)}
               </strong>
               <p className="collected-split-sub">{monthOnlinePercent}% of collected</p>
-            </div>
+            </button>
           </div>
         </article>
 
@@ -594,18 +616,40 @@ function Dashboard({
           </div>
 
           <div className="donut-legend">
-            <div className="donut-legend-item">
+            <button
+              type="button"
+              className="donut-legend-item donut-legend-button"
+              onClick={() =>
+                openStudentsWithFilters({
+                  monthKeyOverride: "",
+                  paymentModes: ["Cash"],
+                  monthRangeFrom: normalizedFrom,
+                  monthRangeTo: normalizedTo,
+                })
+              }
+            >
               <span className="dot dot-cash" />
               <span>
                 Cash {formatter.format(rangeTotals.cash)} ({rangeCashPercent}%)
               </span>
-            </div>
-            <div className="donut-legend-item">
+            </button>
+            <button
+              type="button"
+              className="donut-legend-item donut-legend-button"
+              onClick={() =>
+                openStudentsWithFilters({
+                  monthKeyOverride: "",
+                  paymentModes: ["Online"],
+                  monthRangeFrom: normalizedFrom,
+                  monthRangeTo: normalizedTo,
+                })
+              }
+            >
               <span className="dot dot-online" />
               <span>
                 Online {formatter.format(rangeTotals.online)} ({rangeOnlinePercent}%)
               </span>
-            </div>
+            </button>
           </div>
 
           <div className="donut-wrap">
@@ -714,8 +758,11 @@ function StudentsScreen({
   monthChoices,
   monthFilter,
   onMonthFilterChange,
+  rangeFilter,
   paymentStatusFilter,
   onPaymentStatusFilterChange,
+  paymentModeFilter,
+  onPaymentModeFilterChange,
 }) {
   const monthFilterInputRef = useRef(null);
   const [query, setQuery] = useState("");
@@ -754,6 +801,7 @@ function StudentsScreen({
   });
   const studentRows = useMemo(() => {
     const hasNameSearch = query.trim().length > 0;
+    const hasRangeFilter = Boolean(rangeFilter?.from && rangeFilter?.to);
     return visibleStudents.flatMap((student) => {
       const pendingHistory = [...(student.dueRows || [])].sort((a, b) =>
         String(b.month_key || "").localeCompare(String(a.month_key || "")),
@@ -777,6 +825,7 @@ function StudentsScreen({
           {
             key: `${student.student_id}-${monthFilter}`,
             student,
+            monthKey: monthFilter,
             monthLabel,
             monthStatus: status,
             dueAmount,
@@ -788,10 +837,14 @@ function StudentsScreen({
         ];
       }
 
-      if ((hasNameSearch || paymentStatusFilter.length > 0) && fullHistory.length) {
+      if (
+        (hasNameSearch || paymentStatusFilter.length > 0 || paymentModeFilter.length > 0 || hasRangeFilter) &&
+        fullHistory.length
+      ) {
         return fullHistory.map((fee) => ({
           key: `${student.student_id}-${fee.month_key}-history`,
           student,
+          monthKey: normalizeMonthKey(fee.month_key),
           monthLabel: fee.month_label || formatMonthLabel(fee.month_key),
           monthStatus: fee.status || "Pending",
           dueAmount: Number(fee.balance_due || 0),
@@ -806,6 +859,7 @@ function StudentsScreen({
         return pendingHistory.map((fee) => ({
           key: `${student.student_id}-${fee.month_key}`,
           student,
+          monthKey: normalizeMonthKey(fee.month_key),
           monthLabel: fee.month_label || formatMonthLabel(fee.month_key),
           monthStatus: fee.status,
           dueAmount: Number(fee.balance_due || 0),
@@ -820,6 +874,7 @@ function StudentsScreen({
         {
           key: `${student.student_id}-latest`,
           student,
+          monthKey: normalizeMonthKey(student.selectedMonthFee?.month_key || ""),
           monthLabel: student.selectedMonth || "-",
           monthStatus: student.selectedMonthStatus || "Paid",
           dueAmount: Number(student.selectedMonthFee?.balance_due || 0),
@@ -830,11 +885,40 @@ function StudentsScreen({
         },
       ];
     });
-  }, [monthChoices, monthFilter, paymentStatusFilter.length, query, visibleStudents]);
+  }, [
+    monthChoices,
+    monthFilter,
+    paymentModeFilter.length,
+    paymentStatusFilter.length,
+    query,
+    rangeFilter?.from,
+    rangeFilter?.to,
+    visibleStudents,
+  ]);
   const filteredStudentRows = useMemo(() => {
-    if (!paymentStatusFilter.length) return studentRows;
-    return studentRows.filter((row) => paymentStatusFilter.includes(row.monthStatus));
-  }, [paymentStatusFilter, studentRows]);
+    let rows = studentRows;
+
+    if (paymentStatusFilter.length) {
+      rows = rows.filter((row) => paymentStatusFilter.includes(row.monthStatus));
+    }
+
+    if (paymentModeFilter.length) {
+      rows = rows.filter((row) => paymentModeFilter.includes(row.paymentMode || "Pending"));
+    }
+
+    const rangeFrom = normalizeMonthKey(rangeFilter?.from || "");
+    const rangeTo = normalizeMonthKey(rangeFilter?.to || "");
+    if (rangeFrom && rangeTo) {
+      const from = rangeFrom <= rangeTo ? rangeFrom : rangeTo;
+      const to = rangeFrom <= rangeTo ? rangeTo : rangeFrom;
+      rows = rows.filter((row) => {
+        const rowMonthKey = normalizeMonthKey(row.monthKey || "");
+        return rowMonthKey && rowMonthKey >= from && rowMonthKey <= to;
+      });
+    }
+
+    return rows;
+  }, [paymentModeFilter, paymentStatusFilter, rangeFilter?.from, rangeFilter?.to, studentRows]);
 
   function togglePaymentStatus(status) {
     const exists = paymentStatusFilter.includes(status);
@@ -842,6 +926,13 @@ function StudentsScreen({
       exists
         ? paymentStatusFilter.filter((s) => s !== status)
         : [...paymentStatusFilter, status],
+    );
+  }
+
+  function togglePaymentMode(mode) {
+    const exists = paymentModeFilter.includes(mode);
+    onPaymentModeFilterChange(
+      exists ? paymentModeFilter.filter((current) => current !== mode) : [...paymentModeFilter, mode],
     );
   }
 
@@ -955,6 +1046,11 @@ function StudentsScreen({
             </select>
           )}
           <p className="tiny-copy">{monthFilter ? formatMonthLabel(monthFilter) : "All months"}</p>
+          {rangeFilter?.from && rangeFilter?.to ? (
+            <p className="tiny-copy">
+              Range: {formatMonthLabel(rangeFilter.from)} to {formatMonthLabel(rangeFilter.to)}
+            </p>
+          ) : null}
         </label>
 
         <label className="field">
@@ -999,6 +1095,34 @@ function StudentsScreen({
                 type="button"
                 className="ghost-button status-clear"
                 onClick={() => onPaymentStatusFilterChange([])}
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="field">
+          <span>Payment mode</span>
+          <div className="status-chip-group">
+            {PAYMENT_MODE_OPTIONS.map((mode) => {
+              const active = paymentModeFilter.includes(mode);
+              return (
+                <button
+                  key={mode}
+                  type="button"
+                  className={`status-chip ${active ? "status-chip-active" : ""}`}
+                  onClick={() => togglePaymentMode(mode)}
+                >
+                  {mode}
+                </button>
+              );
+            })}
+            {paymentModeFilter.length > 0 ? (
+              <button
+                type="button"
+                className="ghost-button status-clear"
+                onClick={() => onPaymentModeFilterChange([])}
               >
                 Clear
               </button>
@@ -1155,7 +1279,9 @@ function StudentsScreen({
               <button
                 type="button"
                 className="ghost-button icon-action"
-                onClick={() => onQuickAddPayment(row.student.student_id, monthFilter)}
+                onClick={() =>
+                  onQuickAddPayment(row.student.student_id, monthFilter || row.monthKey)
+                }
               >
                 +Pay
               </button>
@@ -2180,6 +2306,8 @@ export default function App() {
   const [monthKey, setMonthKey] = useState("");
   const [studentsMonthFilter, setStudentsMonthFilter] = useState(() => getCurrentMonthKey());
   const [studentsPaymentStatusFilter, setStudentsPaymentStatusFilter] = useState([]);
+  const [studentsPaymentModeFilter, setStudentsPaymentModeFilter] = useState([]);
+  const [studentsRangeFilter, setStudentsRangeFilter] = useState({ from: "", to: "" });
   const [paymentStudentId, setPaymentStudentId] = useState("");
   const [paymentMonthOverride, setPaymentMonthOverride] = useState("");
   const [localStudents, setLocalStudents] = useState(initialStudents);
@@ -2712,10 +2840,29 @@ export default function App() {
   function openStudentsWithFilters({
     monthKey: targetMonthKey = monthKey,
     paymentStatuses = [],
+    paymentModes = [],
+    monthRangeFrom = "",
+    monthRangeTo = "",
   }) {
-    setStudentsMonthFilter(normalizeMonthKey(targetMonthKey));
+    const from = normalizeMonthKey(monthRangeFrom);
+    const to = normalizeMonthKey(monthRangeTo);
+    if (from && to) {
+      const rangeFrom = from <= to ? from : to;
+      const rangeTo = from <= to ? to : from;
+      setStudentsMonthFilter("");
+      setStudentsRangeFilter({ from: rangeFrom, to: rangeTo });
+    } else {
+      setStudentsMonthFilter(normalizeMonthKey(targetMonthKey));
+      setStudentsRangeFilter({ from: "", to: "" });
+    }
     setStudentsPaymentStatusFilter(paymentStatuses);
+    setStudentsPaymentModeFilter(paymentModes);
     setActiveScreen("students");
+  }
+
+  function handleStudentsMonthFilterChange(value) {
+    setStudentsMonthFilter(value);
+    setStudentsRangeFilter({ from: "", to: "" });
   }
 
   async function handleLogin(passcode) {
@@ -2848,9 +2995,12 @@ export default function App() {
             reminderMetaByStudentId={reminderMetaByStudentId}
             monthChoices={monthChoices}
             monthFilter={studentsMonthFilter}
-            onMonthFilterChange={setStudentsMonthFilter}
+            onMonthFilterChange={handleStudentsMonthFilterChange}
+            rangeFilter={studentsRangeFilter}
             paymentStatusFilter={studentsPaymentStatusFilter}
             onPaymentStatusFilterChange={setStudentsPaymentStatusFilter}
+            paymentModeFilter={studentsPaymentModeFilter}
+            onPaymentModeFilterChange={setStudentsPaymentModeFilter}
           />
         )}
         {activeScreen === "payment" && (
