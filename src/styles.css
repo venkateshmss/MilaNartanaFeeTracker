@@ -921,6 +921,14 @@ button {
   gap: 2px;
 }
 
+.collected-split-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
 .collected-split-label {
   margin: 0;
   color: var(--text-soft);
@@ -1058,6 +1066,14 @@ button {
   font-weight: 700;
 }
 
+.donut-legend-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  width: fit-content;
+  cursor: pointer;
+}
+
 .dot {
   width: 12px;
   height: 12px;
@@ -1123,7 +1139,9 @@ button {
 }
 
 .collection-row-button:focus-visible,
-.status-chip:focus-visible {
+.status-chip:focus-visible,
+.collected-split-button:focus-visible,
+.donut-legend-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
