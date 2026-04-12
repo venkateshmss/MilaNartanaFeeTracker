@@ -1159,7 +1159,7 @@ function StudentsScreen({
               >
                 +Pay
               </button>
-              {reminderMetaByStudentId[row.student.student_id] ? (
+              {row.monthStatus !== "Paid" && reminderMetaByStudentId[row.student.student_id] ? (
                 <a
                   className="whatsapp-button icon-action"
                   href={reminderMetaByStudentId[row.student.student_id].whatsappLink}
