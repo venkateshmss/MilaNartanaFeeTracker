@@ -1,97 +1,153 @@
 # Mila Nartana Fee Tracker
 
-Simple mobile-first React demo for tracking month-wise dance class fee payments, pending dues, and WhatsApp reminder links.
+Mobile-first React app for tracking monthly student fees with Google Sheets as the backend source of truth.
 
-## Run
+## What the app includes
+
+- Dashboard with:
+  - month selector
+  - unified fee summary tile (expected, collected, pending, cash, online)
+  - payment mode donut share for a selected month range
+- Students tab with filters:
+  - month
+  - search
+  - location
+  - payment status (`Paid`, `Partial`, `Pending`)
+  - payment mode (`Cash`, `Online`, `Mixed`, `Pending`, `None`)
+- Bulk Add Payment flow
+- Student profile edit flow
+- Reminder queue and WhatsApp deep links
+- Lightweight passcode auth gate for deployment
+
+## Local run
 
 1. Install Node.js 18+.
-2. Run `npm install`.
-3. Copy `.env.example` to `.env`.
-4. Set `VITE_SHEETS_WEB_APP_URL` and `VITE_SHEETS_WRITE_TOKEN` in `.env` for local dev.
-5. Run `npm run dev`.
-6. For phone testing on same Wi-Fi, run `npm run dev -- --host`.
-7. Open `http://<your-laptop-local-ip>:5173` in your mobile browser.
+2. Install dependencies:
+   - `npm install`
+3. Copy env template:
+   - `cp .env.example .env` (or create `.env` manually on Windows)
+4. Set local env values:
+   - `VITE_SHEETS_WEB_APP_URL`
+   - `VITE_SHEETS_WRITE_TOKEN`
+5. Start app:
+   - `npm run dev`
+6. For mobile testing on same Wi-Fi:
+   - `npm run dev -- --host`
 
-## Demo scope
+## Environment variables
 
-- Dashboard with month filter and paid/pending/partial summary
-- Student status screen with search and location filter
-- Payment entry form aligned to the Google Sheets row design
-- Reminder queue with month-wise due breakdown and WhatsApp deep links
+### Local development (`.env`)
 
-## Google Sheets path
+- `VITE_SHEETS_WEB_APP_URL`: Apps Script Web App URL
+- `VITE_SHEETS_WRITE_TOKEN`: write token passed through Vite proxy in dev mode
 
-- `src/data/mockData.js` mirrors the proposed `Students`, `MonthlyFees`, and `Settings` sheets.
-- `src/utils/feeTracker.js` contains the reusable month filtering, summary, grouping, and reminder helpers.
-- Replace the mock arrays in `src/App.jsx` with Sheet fetch/write logic when ready.
-- Integration scaffold is in `src/services/googleSheetsService.js`.
-- Import-ready sample files are in `data/samples/`.
+### Vercel server env vars
 
-## Real Sheets hookup (recommended)
+- `SHEETS_WEB_APP_URL`
+- `SHEETS_WRITE_TOKEN`
+- `PASSCODE_HASH`
+- `AUTH_COOKIE_SECRET`
+- `AUTH_SESSION_DAYS` (recommended: `7`)
+- `AUTH_MAX_ATTEMPTS` (recommended: `5`)
+- `AUTH_LOCKOUT_MINUTES` (recommended: `15`)
 
-1. Create a Google Sheet with tabs: `Students`, `MonthlyFees`, `Settings`.
-2. Copy data from the CSVs in `data/samples/` into those tabs.
-3. Create a Google Apps Script attached to that sheet and deploy it as a Web App.
-4. Implement `doPost` actions: `fetchAll`, `updateStudentStatus`, `addMonthlyFeeRow`.
-   Deploy script is available at `google-apps-script/fee-tracker-api.gs`.
-5. Deploy Apps Script as Web App:
-   - Execute as: Me
-   - Who has access: Anyone with the link (or your Google Workspace users)
-6. Local dev uses a Vite proxy (`/apps-script`) and sends token from `.env`.
-7. For Vercel production, use server-side env vars (not `VITE_*`):
-   - `SHEETS_WEB_APP_URL`
-   - `SHEETS_WRITE_TOKEN`
-8. In production, frontend calls `/api/sheets` so token is never exposed in browser bundle.
-9. Restart `npm run dev` after `.env` changes.
+## Data + backend architecture
 
-## Access Security (Vercel)
+- Frontend starts with local sample data from:
+  - `src/data/mockData.js`
+- It then hydrates from Google Sheets via:
+  - local dev: Vite proxy -> Apps Script
+  - production: `/api/sheets` Vercel function -> Apps Script
+- Latest fetched dataset is cached in browser localStorage (`mnft.sheets_cache_v1`) for faster reload/fallback.
 
-This app supports a lightweight passcode gate without OAuth.
+Main backend script used in Google Apps Script:
+- `google-apps-script/fee-tracker-api.gs`
 
-1. Add Vercel server env vars:
-   - `SHEETS_WEB_APP_URL`
-   - `SHEETS_WRITE_TOKEN`
-   - `PASSCODE_HASH`
-   - `AUTH_COOKIE_SECRET`
-   - `AUTH_SESSION_DAYS=7`
-   - `AUTH_MAX_ATTEMPTS=5`
-   - `AUTH_LOCKOUT_MINUTES=15`
-2. Generate a passcode hash locally:
-   - `npm run generate:passcode-hash`
-   - Copy output into `PASSCODE_HASH`.
-3. Redeploy Vercel.
-4. App behavior:
-   - Unauthenticated users see the in-app login screen.
-   - `/api/sheets` is blocked unless session cookie is valid.
-   - 5 failed attempts trigger a temporary lockout.
+Expected Google Sheet tabs:
+- `Students`
+- `MonthlyFees`
+- `Settings`
+
+## Debug mode
+
+Debug panel is hidden by default.
+
+- Open app with URL query parameter:
+  - `?debug=true`
+- Example:
+  - `http://localhost:5173/?debug=true`
+
+Debug panel shows:
+- endpoint configured state
+- token configured state (or server-managed)
+- endpoint mode (`vite-proxy` or `vercel-server-proxy`)
+- last request action/status/error
+- current UI load error (if any)
+
+## Real Sheets setup
+
+1. Create Google Sheet with tabs:
+   - `Students`, `MonthlyFees`, `Settings`
+2. Paste sample CSV data from:
+   - `data/samples/Students.sample.csv`
+   - `data/samples/MonthlyFees.sample.csv`
+   - `data/samples/Settings.sample.csv`
+3. Add Apps Script from:
+   - `google-apps-script/fee-tracker-api.gs`
+4. Set Script Property:
+   - `APP_ADMIN_TOKEN` (must match app token)
+5. Deploy as Web App:
+   - Execute as: `Me`
+   - Access: as required for your usage model
+
+## Auth model (lightweight)
+
+- App uses passcode-based session auth in Vercel API routes:
+  - `/api/auth/login`
+  - `/api/auth/session`
+  - `/api/auth/logout`
+- `/api/sheets` is blocked without valid session cookie.
+- Session cookie is signed with `AUTH_COOKIE_SECRET`.
+- Failed passcode attempts are lockout-protected.
+
+## Sample data scripts
+
+- Rebuild local samples + mock data from local CSV pipeline:
+  - `npm run rebuild:samples`
+- Sync samples from live Google Sheets response:
+  - `npm run sync:samples:weekly`
 
 ## Weekly sample sync automation
 
-This repo includes a scheduled GitHub Actions workflow that refreshes sample data weekly and opens/updates a PR branch.
+Workflow file:
+- `.github/workflows/weekly-sample-sync.yml`
 
-1. Set GitHub repository secrets:
-   - `SHEETS_WEB_APP_URL`
-   - `SHEETS_WRITE_TOKEN`
-2. Workflow file: `.github/workflows/weekly-sample-sync.yml`
-   - Schedule target: Sunday 2:00 AM PT
-   - Manual trigger supported via `workflow_dispatch`
-3. Local/manual commands:
-   - Sync from live sheets and regenerate samples:
-     - `npm run sync:samples:weekly`
-   - Rebuild local samples + mock data from local CSV pipeline:
-     - `npm run rebuild:samples`
-4. PR flow:
-   - Automation commits to `chore/weekly-sample-sync`
-   - PR target is `main`
-   - PR body includes an auto-generated sync summary (counts + month range + status mix)
-   - No direct push to `main`
+Behavior:
+- Runs weekly (Sunday 2:00 AM PT target, DST-safe guard)
+- Supports manual trigger (`workflow_dispatch`)
+- Pulls live data using repo secrets:
+  - `SHEETS_WEB_APP_URL`
+  - `SHEETS_WRITE_TOKEN`
+- Regenerates:
+  - `data/samples/Students.sample.csv`
+  - `data/samples/MonthlyFees.sample.csv`
+  - `data/samples/Settings.sample.csv`
+  - `src/data/mockData.js`
+- Creates/updates PR branch:
+  - `chore/weekly-sample-sync`
+- PR body includes sync summary (counts + month range + status mix)
 
-## Troubleshooting `Failed to fetch`
+## Troubleshooting
 
-1. Confirm `.env` is in project root (not inside `sample-data`).
-2. Restart dev server after changing `.env`.
-3. In Apps Script, deploy a **new version** after edits.
-4. Verify Web App access is `Anyone with the link` (or org equivalent).
-5. Open this URL in browser to validate deployment:
-   `https://script.google.com/macros/s/<DEPLOYMENT_ID>/exec?action=fetchAll`
-6. If browser URL works but app fails, hard refresh and retry.
+If app shows stale/local data:
+- restart dev server after `.env` changes
+- confirm Apps Script deployment URL is correct
+- test Apps Script endpoint directly
+- hard refresh browser or clear site data
+
+If Vercel says missing auth envs:
+- confirm `PASSCODE_HASH` and `AUTH_COOKIE_SECRET` are set
+- redeploy after env update
+
+If local build shows `spawn EPERM`:
+- this is environment/process permission related on Windows shell context, not app logic.

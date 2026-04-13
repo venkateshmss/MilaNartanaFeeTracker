@@ -333,9 +333,6 @@ function Dashboard({
   totalAmount,
   expectedAmount,
   pendingGapAmount,
-  fullPaidAmount,
-  partialCollectedAmount,
-  collectionRate,
   formatter,
   onOpenStudentsFiltered,
 }) {
@@ -346,8 +343,6 @@ function Dashboard({
   const minMonth = monthChoices[0]?.key || "";
   const maxMonth = monthChoices[monthChoices.length - 1]?.key || "";
   const expectedSafe = Math.max(Number(expectedAmount || 0), 0);
-  const fullPaidSafe = Math.max(Number(fullPaidAmount || 0), 0);
-  const partialSafe = Math.max(Number(partialCollectedAmount || 0), 0);
   const collectedSafe = Math.max(Number(totalAmount || 0), 0);
   const pendingSafe = Math.max(Number(pendingGapAmount || 0), 0);
   const cashSafe = 0;
@@ -442,10 +437,6 @@ function Dashboard({
     });
   }
 
-  function openStudentsWithStatuses(statuses) {
-    openStudentsWithFilters({ paymentStatuses: statuses });
-  }
-
   return (
     <section className="panel stack-lg">
       <div className="hero-card">
@@ -503,51 +494,129 @@ function Dashboard({
       </div>
 
       <div className="dashboard-metrics-grid">
-        <article className="dashboard-metric-card metric-students">
-          <p className="dashboard-metric-title">Total students</p>
-          <strong className="dashboard-metric-value">{totalStudents}</strong>
-          <p className="dashboard-metric-sub">{monthLabel}</p>
-        </article>
+        <article className="fee-summary-card">
+          <header className="fee-summary-head">
+            <p className="fee-summary-title">Fee Summary · {monthLabel.toUpperCase()}</p>
+            <p className="fee-summary-students">{totalStudents} students</p>
+          </header>
 
-        <article className="dashboard-metric-card metric-collected">
-          <p className="dashboard-metric-title">Amount collected</p>
-          <strong className="dashboard-metric-value text-success">{formatter.format(collectedSafe)}</strong>
-          <p className="dashboard-metric-sub">
-            {collectedPercent}% of {formatter.format(expectedSafe)} total · {monthLabel}
-          </p>
-          <div className="collected-split">
+          <div className="fee-summary-grid">
             <button
               type="button"
-              className="collected-split-col collected-split-button"
-              onClick={() => openStudentsWithFilters({ paymentModes: ["Cash"] })}
+              className="fee-summary-block fee-summary-expected"
+              onClick={() =>
+                openStudentsWithFilters({
+                  monthKeyOverride: monthKey,
+                  paymentStatuses: [],
+                  paymentModes: [],
+                })
+              }
             >
-              <p className="collected-split-label">
-                <span className="dot dot-cash" /> Cash
-              </p>
-              <strong className="collected-split-value cash">{formatter.format(monthModeTotals.cash)}</strong>
-              <p className="collected-split-sub">{monthCashPercent}% of collected</p>
+              <p className="fee-summary-label">Total expected</p>
+              <div className="fee-summary-expected-row">
+                <strong className="fee-summary-amount">{formatter.format(expectedSafe)}</strong>
+                <span className="expected-student-pill">{totalStudents} students</span>
+              </div>
             </button>
-            <div className="collected-split-divider" />
+
             <button
               type="button"
-              className="collected-split-col collected-split-button"
-              onClick={() => openStudentsWithFilters({ paymentModes: ["Online"] })}
+              className="fee-summary-block fee-summary-collected"
+              onClick={() =>
+                openStudentsWithFilters({
+                  monthKeyOverride: monthKey,
+                  paymentStatuses: ["Paid", "Partial"],
+                })
+              }
             >
-              <p className="collected-split-label">
-                <span className="dot dot-online" /> Online
-              </p>
-              <strong className="collected-split-value online">
-                {formatter.format(monthModeTotals.online)}
-              </strong>
-              <p className="collected-split-sub">{monthOnlinePercent}% of collected</p>
+              <p className="fee-summary-label">Collected</p>
+              <strong className="fee-summary-amount text-success">{formatter.format(collectedSafe)}</strong>
+              <p className="fee-summary-sub">of {formatter.format(expectedSafe)}</p>
+              <div className="summary-progress-row">
+                <div className="progress-track">
+                  <div
+                    className="progress-fill progress-fill-total"
+                    style={{ width: `${progressPercent(collectedSafe)}%` }}
+                  />
+                </div>
+                <span className="summary-percent-badge">{collectedPercent}%</span>
+              </div>
             </button>
           </div>
-        </article>
 
-        <article className="dashboard-metric-card metric-pending">
-          <p className="dashboard-metric-title">Amount pending</p>
-          <strong className="dashboard-metric-value text-danger">{formatter.format(pendingSafe)}</strong>
-          <p className="dashboard-metric-sub">{pendingPercent}% outstanding</p>
+          <button
+            type="button"
+            className="fee-summary-pending"
+            onClick={() =>
+              openStudentsWithFilters({
+                monthKeyOverride: monthKey,
+                paymentStatuses: ["Pending", "Partial"],
+              })
+            }
+          >
+            <div>
+              <p className="fee-summary-label">Pending</p>
+              <strong className="fee-summary-amount text-danger">{formatter.format(pendingSafe)}</strong>
+            </div>
+            <div className="fee-summary-pending-meta">
+              <span className="pending-pill">{pendingPercent}% outstanding</span>
+              <p>{formatter.format(pendingSafe)} yet to collect</p>
+            </div>
+          </button>
+
+          <div className="fee-summary-grid">
+            <button
+              type="button"
+              className="fee-summary-block fee-summary-cash"
+              onClick={() =>
+                openStudentsWithFilters({
+                  monthKeyOverride: monthKey,
+                  paymentModes: ["Cash"],
+                })
+              }
+            >
+              <p className="fee-summary-label">
+                <span className="dot dot-cash" /> Cash
+              </p>
+              <strong className="fee-summary-amount">{formatter.format(monthModeTotals.cash)}</strong>
+              <p className="fee-summary-sub">{monthCashPercent}% of collected</p>
+              <div className="summary-progress-row">
+                <div className="progress-track">
+                  <div
+                    className="progress-fill progress-fill-paid"
+                    style={{ width: `${Math.max(0, Math.min(100, monthCashPercent))}%` }}
+                  />
+                </div>
+                <span className="summary-percent-badge">{monthCashPercent}%</span>
+              </div>
+            </button>
+
+            <button
+              type="button"
+              className="fee-summary-block fee-summary-online"
+              onClick={() =>
+                openStudentsWithFilters({
+                  monthKeyOverride: monthKey,
+                  paymentModes: ["Online"],
+                })
+              }
+            >
+              <p className="fee-summary-label">
+                <span className="dot dot-online" /> Online
+              </p>
+              <strong className="fee-summary-amount">{formatter.format(monthModeTotals.online)}</strong>
+              <p className="fee-summary-sub">{monthOnlinePercent}% of collected</p>
+              <div className="summary-progress-row">
+                <div className="progress-track">
+                  <div
+                    className="progress-fill progress-fill-online"
+                    style={{ width: `${Math.max(0, Math.min(100, monthOnlinePercent))}%` }}
+                  />
+                </div>
+                <span className="summary-percent-badge">{monthOnlinePercent}%</span>
+              </div>
+            </button>
+          </div>
         </article>
       </div>
 
@@ -579,7 +648,7 @@ function Dashboard({
         </article>
       </div>}
 
-      <div className="dashboard-analytics-grid">
+      <div className="dashboard-analytics-grid single-analytics">
         <div className="info-card dashboard-donut-card">
           <div className="section-heading">
             <div>
@@ -662,84 +731,6 @@ function Dashboard({
           </div>
         </div>
 
-        <div className="info-card">
-          <div className="section-heading">
-            <div>
-              <p className="eyebrow">Collection progress</p>
-              <h2>{monthLabel} progress details</h2>
-            </div>
-            <p className="section-copy">Amounts are shown against expected total for the month.</p>
-          </div>
-
-          <div className="dashboard-progress-card">
-          <button
-            type="button"
-            className="collection-row collection-row-button"
-            onClick={() => openStudentsWithStatuses(["Paid"])}
-          >
-            <div className="collection-row-head">
-              <span>Fully paid</span>
-              <strong>{formatter.format(fullPaidSafe)} / {formatter.format(expectedSafe)}</strong>
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill progress-fill-paid" style={{ width: `${progressPercent(fullPaidSafe)}%` }} />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="collection-row collection-row-button"
-            onClick={() => openStudentsWithStatuses(["Partial"])}
-          >
-            <div className="collection-row-head">
-              <span>Partial payments</span>
-              <strong>{formatter.format(partialSafe)} / {formatter.format(expectedSafe)}</strong>
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill progress-fill-partial" style={{ width: `${progressPercent(partialSafe)}%` }} />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="collection-row collection-row-button"
-            onClick={() => openStudentsWithStatuses(["Paid", "Partial"])}
-          >
-            <div className="collection-row-head">
-              <span>Total collected</span>
-              <strong>{formatter.format(collectedSafe)} / {formatter.format(expectedSafe)}</strong>
-            </div>
-            <div
-              className="progress-track"
-            >
-              <div className="progress-fill progress-fill-total" style={{ width: `${progressPercent(collectedSafe)}%` }} />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="collection-row collection-row-button"
-            onClick={() => openStudentsWithStatuses(["Pending", "Partial"])}
-          >
-            <div className="collection-row-head">
-              <span>Pending recovery</span>
-              <strong>{formatter.format(pendingSafe)} / {formatter.format(expectedSafe)}</strong>
-            </div>
-            <div className="progress-track">
-              <div className="progress-fill progress-fill-pending" style={{ width: `${progressPercent(pendingSafe)}%` }} />
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="collection-rate-box collection-row-button"
-            onClick={() => openStudentsWithStatuses(["Paid", "Partial"])}
-          >
-            <span>Collection rate</span>
-            <strong>{collectionRate}%</strong>
-          </button>
-          </div>
-        </div>
       </div>
     </section>
   );
@@ -2693,22 +2684,6 @@ export default function App() {
       ),
     [monthEligibleStudents],
   );
-  const fullPaidAmount = useMemo(
-    () =>
-      monthEligibleStudents.reduce((sum, student) => {
-        if (student.selectedMonthStatus !== "Paid") return sum;
-        return sum + Number(student.selectedMonthFee?.fee_amount || 0);
-      }, 0),
-    [monthEligibleStudents],
-  );
-  const partialCollectedAmount = useMemo(
-    () =>
-      monthEligibleStudents.reduce((sum, student) => {
-        if (student.selectedMonthStatus !== "Partial") return sum;
-        return sum + Number(student.selectedMonthFee?.amount_paid || 0);
-      }, 0),
-    [monthEligibleStudents],
-  );
   const expectedAmount = useMemo(
     () =>
       monthEligibleStudents.reduce(
@@ -2721,10 +2696,6 @@ export default function App() {
     () => Math.max(expectedAmount - totalAmount, 0),
     [expectedAmount, totalAmount],
   );
-  const collectionRate = useMemo(() => {
-    if (expectedAmount <= 0) return 100;
-    return Math.round((totalAmount / expectedAmount) * 100);
-  }, [expectedAmount, totalAmount]);
   const debugStatus = useMemo(() => getSheetsDebugStatus(), [debugTick, loadError, isLoading]);
   const reminderGroups = useMemo(
     () => {
@@ -2978,9 +2949,6 @@ export default function App() {
             expectedAmount={expectedAmount}
             totalAmount={totalAmount}
             pendingGapAmount={pendingGapAmount}
-            fullPaidAmount={fullPaidAmount}
-            partialCollectedAmount={partialCollectedAmount}
-            collectionRate={collectionRate}
             formatter={formatter}
             onOpenStudentsFiltered={openStudentsWithFilters}
           />
