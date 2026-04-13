@@ -962,6 +962,26 @@ button {
   line-height: 1;
 }
 
+.fee-summary-expected-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.expected-student-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  color: #72c9ff;
+  background: rgba(34, 100, 166, 0.45);
+  border: 1px solid rgba(88, 171, 255, 0.35);
+  font-weight: 800;
+  font-size: 1.05rem;
+}
+
 .fee-summary-sub {
   margin: 0;
   color: var(--text-soft);

@@ -513,10 +513,10 @@ function Dashboard({
               }
             >
               <p className="fee-summary-label">Total expected</p>
-              <strong className="fee-summary-amount">{formatter.format(expectedSafe)}</strong>
-              <p className="fee-summary-sub">
-                {totalStudents} × {formatter.format(expectedSafe > 0 && totalStudents > 0 ? expectedSafe / totalStudents : 0)}
-              </p>
+              <div className="fee-summary-expected-row">
+                <strong className="fee-summary-amount">{formatter.format(expectedSafe)}</strong>
+                <span className="expected-student-pill">{totalStudents} students</span>
+              </div>
             </button>
 
             <button
