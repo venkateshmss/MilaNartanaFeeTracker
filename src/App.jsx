@@ -32,7 +32,7 @@ const screenLabels = {
   reminders: "Reminders",
 };
 const PAYMENT_STATUS_OPTIONS = ["Paid", "Partial", "Pending"];
-const PAYMENT_MODE_OPTIONS = ["Cash", "Online", "Pending"];
+const PAYMENT_MODE_OPTIONS = ["Cash", "Online", "Mixed", "Pending", "None"];
 const SHEETS_CACHE_KEY = "mnft.sheets_cache_v1";
 
 function readSheetsCache() {
@@ -776,10 +776,13 @@ function StudentsScreen({
   const locations = getLocations(studentsWithStatus);
 
   function getPaymentModeLabel(feeLike) {
-    const amountPaid = Number(feeLike?.amount_paid || 0);
-    if (amountPaid <= 0) return "Pending";
     const mode = String(feeLike?.payment_mode || "").trim();
-    return mode || "Pending";
+    if (mode) return mode;
+    const amountPaid = Number(feeLike?.amount_paid || 0);
+    const feeAmount = Number(feeLike?.fee_amount || 0);
+    if (feeAmount <= 0 && String(feeLike?.status || "").trim() === "Paid") return "None";
+    if (amountPaid <= 0) return "Pending";
+    return "Pending";
   }
 
   const visibleStudents = studentsWithStatus.filter((student) => {

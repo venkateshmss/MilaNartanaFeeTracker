@@ -88,6 +88,26 @@ function getEffectiveAmountPaid(row) {
   return 0;
 }
 
+function derivePaymentMode(rows, feeAmount, status) {
+  if (feeAmount <= 0 && status === "Paid") return "None";
+
+  const settledRows = rows.filter((row) => getEffectiveAmountPaid(row) > 0);
+  if (!settledRows.length) return "Pending";
+
+  const modes = new Set(
+    settledRows
+      .map((row) => String(row.payment_mode || "").trim().toLowerCase())
+      .filter(Boolean),
+  );
+
+  const hasCash = modes.has("cash");
+  const hasOnline = modes.has("online");
+  if (hasCash && hasOnline) return "Mixed";
+  if (hasCash) return "Cash";
+  if (hasOnline) return "Online";
+  return "Pending";
+}
+
 export function aggregateMonthlyFees(monthlyFees) {
   const buckets = new Map();
 
@@ -105,6 +125,7 @@ export function aggregateMonthlyFees(monthlyFees) {
     const latestRow = sortedRows[sortedRows.length - 1] || rows[0];
     const totalPaid = rows.reduce((sum, row) => sum + getEffectiveAmountPaid(row), 0);
     const feeAmount = toNumber(latestRow?.fee_amount, 0);
+    const status = deriveFeeStatus(totalPaid, feeAmount);
     return {
       fee_row_id: latestRow?.fee_row_id,
       student_id: latestRow?.student_id,
@@ -112,11 +133,11 @@ export function aggregateMonthlyFees(monthlyFees) {
       month_key: normalizeMonthKey(latestRow?.month_key),
       month_label:
         latestRow?.month_label || formatMonthLabel(normalizeMonthKey(latestRow?.month_key)),
-      payment_mode: latestRow?.payment_mode || "",
+      payment_mode: derivePaymentMode(rows, feeAmount, status),
       fee_amount: feeAmount,
       amount_paid: totalPaid,
       balance_due: Math.max(feeAmount - totalPaid, 0),
-      status: deriveFeeStatus(totalPaid, feeAmount),
+      status,
     };
   });
 }
@@ -157,7 +178,7 @@ function buildStudentLedger(student, aggregatedFees, upToMonthKey) {
       student_name: student.student_name,
       month_key: monthKey,
       month_label: formatMonthLabel(monthKey),
-      payment_mode: "",
+      payment_mode: feeAmount > 0 ? "Pending" : "None",
       fee_amount: feeAmount,
       amount_paid: 0,
       balance_due: feeAmount,
