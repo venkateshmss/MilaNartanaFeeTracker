@@ -872,6 +872,146 @@ button {
   grid-template-columns: 1fr;
 }
 
+.dashboard-metrics-grid .fee-summary-card {
+  grid-column: 1 / -1;
+}
+
+.fee-summary-card {
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, rgba(17, 29, 58, 0.96), rgba(12, 23, 47, 0.96));
+  padding: 16px;
+  display: grid;
+  gap: 14px;
+}
+
+.fee-summary-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.fee-summary-title {
+  margin: 0;
+  color: #86a5db;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.fee-summary-students {
+  margin: 0;
+  color: #9ec1ff;
+  font-weight: 700;
+}
+
+.fee-summary-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.fee-summary-block,
+.fee-summary-pending {
+  border: 1px solid rgba(130, 164, 255, 0.18);
+  border-radius: 16px;
+  padding: 12px;
+  background: rgba(36, 53, 87, 0.54);
+  color: var(--text);
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fee-summary-expected {
+  background: rgba(44, 62, 99, 0.48);
+}
+
+.fee-summary-collected {
+  background: rgba(29, 56, 71, 0.48);
+}
+
+.fee-summary-pending {
+  background: rgba(62, 35, 59, 0.45);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.fee-summary-cash {
+  background: rgba(5, 67, 56, 0.45);
+}
+
+.fee-summary-online {
+  background: rgba(35, 34, 89, 0.45);
+}
+
+.fee-summary-label {
+  margin: 0;
+  color: var(--text-soft);
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.fee-summary-amount {
+  margin: 0;
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.fee-summary-sub {
+  margin: 0;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.fee-summary-pending-meta {
+  text-align: right;
+  display: grid;
+  gap: 6px;
+}
+
+.fee-summary-pending-meta p {
+  margin: 0;
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.pending-pill {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  border-radius: 999px;
+  padding: 0 12px;
+  color: #ff767d;
+  background: rgba(130, 52, 80, 0.38);
+  font-weight: 800;
+}
+
+.summary-progress-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.summary-percent-badge {
+  min-width: 56px;
+  min-height: 28px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  font-weight: 800;
+  color: #4ee39d;
+  background: rgba(20, 98, 76, 0.56);
+}
+
 .dashboard-metric-card {
   border-radius: 16px;
   border: 1px solid var(--border);
@@ -1047,6 +1187,10 @@ button {
   align-items: start;
 }
 
+.dashboard-analytics-grid.single-analytics {
+  grid-template-columns: 1fr;
+}
+
 .donut-filter-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -1220,6 +1364,10 @@ button {
 @media (min-width: 720px) {
   .dashboard-metrics-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .fee-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .metric-students {
