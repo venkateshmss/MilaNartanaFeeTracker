@@ -1267,6 +1267,12 @@ button {
   place-items: center;
 }
 
+.donut-ring-button {
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+
 .donut-hole {
   width: 62%;
   aspect-ratio: 1 / 1;
@@ -1305,7 +1311,8 @@ button {
 .collection-row-button:focus-visible,
 .status-chip:focus-visible,
 .collected-split-button:focus-visible,
-.donut-legend-button:focus-visible {
+.donut-legend-button:focus-visible,
+.donut-ring-button:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }

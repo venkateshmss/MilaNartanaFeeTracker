@@ -437,6 +437,57 @@ function Dashboard({
     });
   }
 
+  function openStudentsForDonutModes(paymentModes) {
+    openStudentsWithFilters({
+      monthKeyOverride: "",
+      paymentStatuses: ["Paid", "Partial"],
+      paymentModes,
+      monthRangeFrom: normalizedFrom,
+      monthRangeTo: normalizedTo,
+    });
+  }
+
+  function handleDonutRingClick(event) {
+    if (rangeTotal <= 0) return;
+
+    // Keyboard activation should open total collected view.
+    if (!event || event.detail === 0 || typeof event.clientX !== "number") {
+      openStudentsForDonutModes(["Cash", "Online"]);
+      return;
+    }
+
+    const rect = event.currentTarget.getBoundingClientRect();
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = event.clientX - cx;
+    const dy = event.clientY - cy;
+    const distance = Math.hypot(dx, dy);
+    const outerRadius = rect.width / 2;
+    const innerRadius = outerRadius * 0.62; // Must match .donut-hole size.
+
+    if (distance > outerRadius) return;
+    if (distance <= innerRadius) {
+      openStudentsForDonutModes(["Cash", "Online"]);
+      return;
+    }
+
+    // Convert click to clockwise angle where 0deg starts at top.
+    const angleDeg = ((Math.atan2(dy, dx) * 180) / Math.PI + 450) % 360;
+    const cashSweepDeg = (rangeCashPercent / 100) * 360;
+
+    if (cashSweepDeg <= 0) {
+      openStudentsForDonutModes(["Online"]);
+      return;
+    }
+    if (cashSweepDeg >= 360) {
+      openStudentsForDonutModes(["Cash"]);
+      return;
+    }
+
+    if (angleDeg < cashSweepDeg) openStudentsForDonutModes(["Cash"]);
+    else openStudentsForDonutModes(["Online"]);
+  }
+
   return (
     <section className="panel stack-lg">
       <div className="hero-card">
@@ -688,14 +739,7 @@ function Dashboard({
             <button
               type="button"
               className="donut-legend-item donut-legend-button"
-              onClick={() =>
-                openStudentsWithFilters({
-                  monthKeyOverride: "",
-                  paymentModes: ["Cash"],
-                  monthRangeFrom: normalizedFrom,
-                  monthRangeTo: normalizedTo,
-                })
-              }
+              onClick={() => openStudentsForDonutModes(["Cash"])}
             >
               <span className="dot dot-cash" />
               <span>
@@ -705,14 +749,7 @@ function Dashboard({
             <button
               type="button"
               className="donut-legend-item donut-legend-button"
-              onClick={() =>
-                openStudentsWithFilters({
-                  monthKeyOverride: "",
-                  paymentModes: ["Online"],
-                  monthRangeFrom: normalizedFrom,
-                  monthRangeTo: normalizedTo,
-                })
-              }
+              onClick={() => openStudentsForDonutModes(["Online"])}
             >
               <span className="dot dot-online" />
               <span>
@@ -722,12 +759,18 @@ function Dashboard({
           </div>
 
           <div className="donut-wrap">
-            <div className="donut-ring" style={{ background: donutBg }}>
+            <button
+              type="button"
+              className="donut-ring donut-ring-button"
+              style={{ background: donutBg }}
+              onClick={handleDonutRingClick}
+              aria-label="Open students filtered by selected range and payment mode"
+            >
               <div className="donut-hole">
                 <strong>{formatter.format(rangeTotal)}</strong>
                 <span>Total</span>
               </div>
-            </div>
+            </button>
           </div>
         </div>
 
